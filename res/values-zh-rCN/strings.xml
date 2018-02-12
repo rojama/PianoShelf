@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+	<string name="app_name">便携乐谱</string>
+	<string name="tab_browse">浏览乐谱</string>
+	<string name="tab_recent">最近打开</string>
+	<string name="tab_favorite">收藏夹</string>
+	<string name="info_add_favorite">添加收藏</string>
+	<string name="info_remove_favorite">移除收藏</string>
+	<string name="info_canot_read">文件不可读</string>
+	<string name="info_not_exiet">文件不存在</string>
+	<string name="info_open_err">文件格式有误</string>
+	<string name="info_page_no">第%d页</string>
+	<string name="dis_back_root">根目录</string>
+	<string name="dis_back_up">上级目录[%s]</string>
+	<string name="menu_setting">设置</string>
+	<string name="menu_exit">退出</string>
+	<string name="menu_pageup">上一页</string>
+	<string name="menu_pagedown">下一页</string>
+	<string name="menu_play">播放</string>
+	<string name="per_display">显示设置</string>
+	<string name="per_background">背景颜色</string>
+	<string name="per_foreground">前景颜色</string>
+	<string name="per_sound">声音设置</string>
+	<string name="per_other">其它设置</string>
+	<string name="per_max_recent">历史记录数</string>
+	<string-array name="list_colour">
+		<item>红</item>
+		<item>蓝</item>
+		<item>绿</item>
+		<item>黑</item>
+		<item>白</item>
+		<item>灰</item>
+		<item>蓝绿</item>
+		<item>品红</item>
+		<item>黄</item>
+		<item>浅灰</item>
+		<item>深灰</item>
+	</string-array>
+	<string-array name="list_colour_value">
+		<item>red</item>
+		<item>blue</item>
+		<item>green</item>
+		<item>black</item>
+		<item>white</item>
+		<item>gray</item>
+		<item>cyan</item>
+		<item>magenta</item>
+		<item>yellow</item>
+		<item>lightgray</item>
+		<item>darkgray</item>
+	</string-array>	
+	<string-array name="list_max_recent">
+		<item>0</item>
+		<item>10</item>
+		<item>20</item>
+		<item>50</item>
+		<item>100</item>
+		<item>200</item>
+		<item>500</item>
+		<item>1000</item>
+	</string-array>
+</resources>

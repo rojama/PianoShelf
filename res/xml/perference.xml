@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen 
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:key="display" android:title="@string/per_display">
+        <ListPreference android:key="foreground" android:title="@string/per_foreground" android:entries="@array/list_colour" android:entryValues="@array/list_colour_value"></ListPreference>
+        <ListPreference android:entries="@array/list_colour" android:entryValues="@array/list_colour_value" android:key="background" android:title="@string/per_background"></ListPreference>
+    </PreferenceCategory>
+    <PreferenceCategory android:title="@string/per_sound" android:key="sound"></PreferenceCategory>
+    <PreferenceCategory android:key="other" android:title="@string/per_other">
+        <ListPreference android:entries="@array/list_max_recent" android:entryValues="@array/list_max_recent" android:key="max_recent" android:title="@string/per_max_recent"></ListPreference>
+    </PreferenceCategory>
+    
+</PreferenceScreen>

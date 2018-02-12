@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/relativeLayout" android:layout_height="match_parent"
+	android:layout_width="match_parent" android:scrollbars="horizontal|vertical">
+
+	<LinearLayout android:orientation="vertical"
+		android:id="@+id/linearLayout_image" android:layout_width="match_parent"
+		android:layout_height="match_parent">
+	</LinearLayout>
+
+	<ZoomControls android:layout_width="wrap_content"
+		android:id="@+id/zoomControls" android:layout_height="wrap_content"
+		android:layout_alignParentBottom="true"
+		android:layout_centerHorizontal="true"></ZoomControls>
+
+	<ProgressBar android:layout_width="wrap_content"
+		android:layout_height="wrap_content" style="?android:attr/progressBarStyleLarge"
+		android:id="@+id/progressBar" android:layout_centerVertical="true"
+		android:layout_centerHorizontal="true">></ProgressBar>
+
+</RelativeLayout>
