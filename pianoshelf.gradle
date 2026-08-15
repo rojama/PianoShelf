@@ -47,25 +47,79 @@ android {
     def useProps  = !useCustom && signingFromProps.keyStorePath && file(signingFromProps.keyStorePath).isFile()
     def chosen = useCustom ? signingFromEnv : (useProps ? signingFromProps : null)
 
+    // 终极兜底：如果以上两条都没有可用 signingConfig，就用 Android SDK 默认 debug keystore 的参数，
+    // 在 build/intermediates/ci-signing/ 下动态生成一个 JKS（口令/alias 同 SDK debug.keystore）。
+    // 这样 CI 环境即便没有 ~/.android/debug.keystore，release APK 也一定能签名成功。
+    if (chosen == null) {
+        File debugKeystore = file("${System.getProperty('user.home')}/.android/debug.keystore")
+        if (!debugKeystore.isFile()) {
+            File ciDir = file("${buildDir}/intermediates/ci-signing")
+            ciDir.mkdirs()
+            File ciJks = new File(ciDir, "ci-release-fallback.jks")
+            if (!ciJks.isFile()) {
+                String dn = "C=US, O=Android, CN=Android Debug"
+                try {
+                    def cmd = ["keytool", "-genkeypair",
+                               "-alias", "androiddebugkey",
+                               "-keyalg", "RSA", "-keysize", "2048",
+                               "-validity", "10950",
+                               "-storetype", "JKS",
+                               "-keypass", "android",
+                               "-storepass", "android",
+                               "-dname", dn,
+                               "-keystore", ciJks.absolutePath]
+                    project.logger.lifecycle("Generating fallback CI signing keystore: $ciJks")
+                    def proc = cmd.execute()
+                    def baos = new ByteArrayOutputStream()
+                    proc.consumeProcessOutput(baos, baos)
+                    int rc = proc.waitFor()
+                    if (rc != 0) {
+                        project.logger.warn("keytool rc=$rc output:\n${baos.toString('UTF-8')}")
+                    }
+                } catch (Exception e) {
+                    project.logger.warn("Failed to generate fallback CI keystore via keytool: ${e.message}")
+                    // keytool 执行失败就不赋值给 chosen，下面仍会走 APK 无签名路径（INSTALL_PARSE_FAILED）
+                }
+            }
+            if (ciJks.isFile()) {
+                chosen = [
+                    keyStorePath   : ciJks.absolutePath,
+                    keyStorePassword: 'android',
+                    keyAlias       : 'androiddebugkey',
+                    keyPassword    : 'android'
+                ]
+            }
+        } else {
+            chosen = [
+                keyStorePath   : debugKeystore.absolutePath,
+                keyStorePassword: 'android',
+                keyAlias       : 'androiddebugkey',
+                keyPassword    : 'android'
+            ]
+        }
+    }
+
     signingConfigs {
         release {
+            // 为了兼容旧手机（本项目 minSdk=21，Android 5.0/6.0/7.0），显式开启 v1(JAR) + v2(APK)。
+            // Android 5/6 解析包时只认 v1 MANIFEST.MF/CERT.SF/CERT.RSA，
+            // 如果只打 v2/v3-only 签名会导致"解析软件包时出现问题 (33) packageInfo is null"。
+            v1SigningEnabled true
+            v2SigningEnabled true
+            v3SigningEnabled false
+            v4SigningEnabled false
+
             if (chosen != null) {
                 storeFile file(chosen.keyStorePath)
                 storePassword chosen.keyStorePassword
                 keyAlias chosen.keyAlias
                 keyPassword chosen.keyPassword
+                project.logger.lifecycle("release signingConfig: storeFile=${chosen.keyStorePath}, alias=${chosen.keyAlias}")
             } else {
-                // Fallback：复用 Android SDK 自带 debug keystore，确保 release 也能签出包并安装。
-                // 正式版分发不要使用这个回退；它仅是为了让 CI/本地 assembleRelease 永不失败。
-                def debugKeystore = file("${System.getProperty('user.home')}/.android/debug.keystore")
-                if (debugKeystore.isFile()) {
-                    storeFile debugKeystore
-                    storePassword 'android'
-                    keyAlias 'androiddebugkey'
-                    keyPassword 'android'
-                }
+                project.logger.warn("No release signingConfig available. " +
+                    "Release APK will be unsigned and CANNOT be installed on any device. " +
+                    "Set PIANOSHELF_KEYSTORE_* env vars or /signing.properties.")
             }
-            // 要求 keystore 存在就必须正确加载
         }
     }
 

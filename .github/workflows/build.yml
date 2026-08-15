@@ -137,20 +137,48 @@ jobs:
             "build-tools;${ANDROID_BUILD_TOOLS}" \
             "platform-tools"
 
-      - name: Decode release keystore (if secret PIANOSHELF_KEYSTORE_BASE64 is set)
+      - name: Decode release keystore (or generate CI fallback)
         id: keystore
         run: |
           set -euo pipefail
+          # 目标文件：pianoshelf.gradle 会通过环境变量 PIANOSHELF_KEYSTORE_FILE 读取它
           TARGET="$PIANOSHELF_KEYSTORE_FILE"
+          mkdir -p "$(dirname "$TARGET")"
+
           if [ -n "${{ secrets.PIANOSHELF_KEYSTORE_BASE64 }}" ]; then
             echo '::group::Decoding keystore from secret PIANOSHELF_KEYSTORE_BASE64'
             echo "${{ secrets.PIANOSHELF_KEYSTORE_BASE64 }}" | base64 -d > "$TARGET"
-            ls -la "$TARGET"
             echo "decoded=yes" >> "$GITHUB_OUTPUT"
             echo '::endgroup::'
+            # 密码 / alias 已经通过 workflow top-level env 从对应 secrets 注入好了，无需额外写
           else
-            echo "::warning::PIANOSHELF_KEYSTORE_BASE64 not set. Release APK will be signed with SDK debug keystore (fallback in pianoshelf.gradle)."
-            echo "decoded=no" >> "$GITHUB_OUTPUT"
+            echo "::warning::PIANOSHELF_KEYSTORE_BASE64 not set. Generating a CI-only fallback JKS with androiddebugkey password 'android' (same as AOSP debug keystore). This Release APK will be signed with v1+v2 to remain installable on minSdk=21. For real release publishing, set PIANOSHELF_KEYSTORE_* secrets."
+            KEYTOOL="${JAVA_HOME}/bin/keytool"
+            if [ ! -x "$KEYTOOL" ]; then
+              # fallback PATH keytool (shouldn't normally happen because setup-java sets JAVA_HOME)
+              KEYTOOL="$(command -v keytool || true)"
+            fi
+            [ -n "${KEYTOOL}" ] && [ -x "$KEYTOOL" ] || {
+              echo "::error::keytool not found at JAVA_HOME/bin nor PATH. JAVA_HOME=${JAVA_HOME:-}"
+              exit 1
+            }
+            rm -f "$TARGET"
+            "$KEYTOOL" -genkeypair -v \
+              -keystore "$TARGET" \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10950 \
+              -dname "C=US, O=Android, CN=Android Debug" >/dev/null
+            ls -la "$TARGET"
+            echo "decoded=no-fallback-generated" >> "$GITHUB_OUTPUT"
+            # 把 fallback keystore 的签名参数也通过 env 喂给 Gradle（保证后续 step 读 env 能命中 signingFromEnv）
+            {
+              echo "PIANOSHELF_KEYSTORE_FILE=$TARGET"
+              echo "PIANOSHELF_KEYSTORE_PASSWORD=android"
+              echo "PIANOSHELF_KEY_ALIAS=androiddebugkey"
+              echo "PIANOSHELF_KEY_PASSWORD=android"
+            } >> "$GITHUB_ENV"
           fi
 
       - name: Build Debug + Release APKs
