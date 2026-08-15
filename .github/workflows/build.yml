@@ -61,12 +61,18 @@ jobs:
       - name: Cache Android SDK components
         uses: actions/cache@v4
         with:
+          # GitHub ubuntu-22/24 hosted runners use ANDROID_HOME=/usr/local/lib/android/sdk,
+          # while self-hosted or historical setups often use $HOME/Android/Sdk.
+          # We cache both so either layout hits.
           path: |
             ~/.android/cache
             ~/Android/Sdk/platforms
             ~/Android/Sdk/build-tools
             ~/Android/Sdk/licenses
-          key: android-sdk-${{ env.ANDROID_COMPILE_SDK }}-${{ env.ANDROID_BUILD_TOOLS }}-v2
+            /usr/local/lib/android/sdk/platforms
+            /usr/local/lib/android/sdk/build-tools
+            /usr/local/lib/android/sdk/licenses
+          key: android-sdk-${{ env.ANDROID_COMPILE_SDK }}-${{ env.ANDROID_BUILD_TOOLS }}-v3
 
       - name: Install required Android SDK (platforms + build-tools) via sdkmanager
         run: |
@@ -120,11 +126,13 @@ jobs:
             echo "$p" >> "$GITHUB_PATH"
           done
 
-          # 自动接受许可
+          # 自动接受许可（--sdk_root 可选；licenses 通常在 ANDROID_HOME/licenses 下）
           mkdir -p "$ANDROID_HOME/licenses" || true
           yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
 
-          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --no_https=false --verbose \
+          # 安装必需组件。注意：新版 cmdline-tools 的 sdkmanager 不支持 --no_https，
+          # 所以不传这个参数，默认用 https 拉包即可。
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
             "platforms;android-${ANDROID_COMPILE_SDK}" \
             "build-tools;${ANDROID_BUILD_TOOLS}" \
             "platform-tools"
