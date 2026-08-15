@@ -104,10 +104,11 @@ android {
             // 为了兼容旧手机（本项目 minSdk=21，Android 5.0/6.0/7.0），显式开启 v1(JAR) + v2(APK)。
             // Android 5/6 解析包时只认 v1 MANIFEST.MF/CERT.SF/CERT.RSA，
             // 如果只打 v2/v3-only 签名会导致"解析软件包时出现问题 (33) packageInfo is null"。
+            // 注意：AGP 8.2 的 SigningConfig 只暴露 v1SigningEnabled / v2SigningEnabled；
+            // v3/v4 受 buildTypes.release.signingConfig 使用 apksigner 的默认策略控制，
+            // 此处不需要也不允许直接赋值（否则会报 MissingMethodException）。
             v1SigningEnabled true
             v2SigningEnabled true
-            v3SigningEnabled false
-            v4SigningEnabled false
 
             if (chosen != null) {
                 storeFile file(chosen.keyStorePath)
