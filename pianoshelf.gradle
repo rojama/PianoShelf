@@ -15,6 +15,60 @@ android {
         versionName "2.1.0-online-catalog"
     }
 
+    // Release 签名配置：优先读取环境变量（CI 通过 GitHub Secrets 注入），
+    // 其次读取项目根目录下的 signing.properties（本地开发用，不进 git）。
+    // 两者都没有时，release 会使用 Android SDK 自带的 debug keystore 签名，
+    // 保证 assembleRelease 产物也是可直接安装的 release APK，
+    // 但正式对外分发请务必替换为你自己的 keystore。
+    def signingEnvFile = file("${rootDir}/signing.properties")
+    def signingFromEnv = [
+        keyStorePath   : System.getenv('PIANOSHELF_KEYSTORE_FILE'),
+        keyStorePassword: System.getenv('PIANOSHELF_KEYSTORE_PASSWORD'),
+        keyAlias       : System.getenv('PIANOSHELF_KEY_ALIAS')          ?: 'pianoshelf',
+        keyPassword    : System.getenv('PIANOSHELF_KEY_PASSWORD')
+    ]
+    // 没有 key password 时，默认用 store password
+    if (signingFromEnv.keyPassword == null || signingFromEnv.keyPassword.empty) {
+        signingFromEnv.keyPassword = signingFromEnv.keyStorePassword
+    }
+
+    def props = new Properties()
+    if (signingEnvFile.isFile()) {
+        signingEnvFile.withInputStream { props.load(it) }
+    }
+    def signingFromProps = [
+        keyStorePath   : props.getProperty('storeFile'),
+        keyStorePassword: props.getProperty('storePassword'),
+        keyAlias       : props.getProperty('keyAlias')     ?: 'pianoshelf',
+        keyPassword    : props.getProperty('keyPassword')  ?: props.getProperty('storePassword')
+    ]
+
+    def useCustom = signingFromEnv.keyStorePath && file(signingFromEnv.keyStorePath).isFile()
+    def useProps  = !useCustom && signingFromProps.keyStorePath && file(signingFromProps.keyStorePath).isFile()
+    def chosen = useCustom ? signingFromEnv : (useProps ? signingFromProps : null)
+
+    signingConfigs {
+        release {
+            if (chosen != null) {
+                storeFile file(chosen.keyStorePath)
+                storePassword chosen.keyStorePassword
+                keyAlias chosen.keyAlias
+                keyPassword chosen.keyPassword
+            } else {
+                // Fallback：复用 Android SDK 自带 debug keystore，确保 release 也能签出包并安装。
+                // 正式版分发不要使用这个回退；它仅是为了让 CI/本地 assembleRelease 永不失败。
+                def debugKeystore = file("${System.getProperty('user.home')}/.android/debug.keystore")
+                if (debugKeystore.isFile()) {
+                    storeFile debugKeystore
+                    storePassword 'android'
+                    keyAlias 'androiddebugkey'
+                    keyPassword 'android'
+                }
+            }
+            // 要求 keystore 存在就必须正确加载
+        }
+    }
+
     // Source sets kept identical to legacy Ant layout so we don't need to move files.
     sourceSets {
         main {
@@ -45,7 +99,13 @@ android {
             // debug 用 applicationId 后缀避免与 release 冲突，可选；此处不加以简化安装
         }
         release {
+            // 有可用签名配置时就用 release signingConfig 签名；没有时 fallback 到 SDK debug keystore
+            if (signingConfigs.release.storeFile != null) {
+                signingConfig signingConfigs.release
+            }
+            // release 包也默认不做 R8 收缩，便于比对和排错；需要时把两行改成 true
             minifyEnabled false
+            shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard.cfg'
         }
     }
