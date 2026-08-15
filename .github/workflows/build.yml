@@ -1,10 +1,10 @@
-name: Build PianoShelf APK
+name: Build PianoShelf APK (Debug + Release)
 
 # 触发条件：
-#   - push 到 main / master / trae/** / release/**
-#   - 创建 tag v*（可选，方便发布）
-#   - PR（避免 PR 里引入构建回归）
-#   - 也可以手动触发（Actions 页 Run workflow）
+#   - push 到 main / master
+#   - 创建 tag v*（发 Draft Release 时会同时挂载 Debug + Release 两个 APK）
+#   - PR（避免 PR 引入构建回归）
+#   - workflow_dispatch 手动触发（可手动挑分支）
 on:
   push:
     branches: [main, master]
@@ -29,10 +29,16 @@ env:
   JAVA_DISTRO: 'temurin'
   ANDROID_COMPILE_SDK: 34
   ANDROID_BUILD_TOOLS: 34.0.0
+  # 构建脚本会读取这些环境变量用于 release 签名（pianoshelf.gradle 内约定的名字）
+  # 值通过 secrets.* 注入；未配置 secret 时 gradle 会 fallback 到 debug keystore。
+  PIANOSHELF_KEYSTORE_FILE: ${{ github.workspace }}/.ci-keystore.jks
+  PIANOSHELF_KEYSTORE_PASSWORD: ${{ secrets.PIANOSHELF_KEYSTORE_PASSWORD }}
+  PIANOSHELF_KEY_ALIAS:          ${{ secrets.PIANOSHELF_KEY_ALIAS || 'pianoshelf' }}
+  PIANOSHELF_KEY_PASSWORD:       ${{ secrets.PIANOSHELF_KEY_PASSWORD }}
 
 jobs:
-  build-debug-apk:
-    name: Assemble Debug APK
+  build-apk:
+    name: Build Debug & Release APK
     runs-on: ubuntu-latest
 
     steps:
@@ -45,10 +51,10 @@ jobs:
           distribution: ${{ env.JAVA_DISTRO }}
           java-version: ${{ env.JAVA_VERSION }}
 
-      - name: Setup Gradle wrapper / environment (no wrapper, use actions/gradle-build-action)
+      - name: Setup Gradle environment (no wrapper, use actions/gradle-build-action)
         uses: gradle/actions/setup-gradle@v4
         with:
-          # 本仓库暂未提交 gradle-wrapper.jar/gradlew，下面我们提供 GRADLE_VERSION 让它自动下载 Gradle
+          # 本仓库暂未提交 gradle-wrapper.jar/gradlew，指定版本由 action 自动下载
           gradle-version: '8.14.5'
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
@@ -71,7 +77,6 @@ jobs:
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
 
-          # 下载 cmdline-tools（如果缓存没命中）
           if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
             CMDLINE_ZIP="$HOME/.android/cache/cmdline-tools-11076708-linux.zip"
             mkdir -p "$HOME/.android/cache"
@@ -83,12 +88,10 @@ jobs:
             TMP_UNPACK="$ANDROID_HOME/cmdline-tools/_tmp_unpack"
             rm -rf "$TMP_UNPACK"
             unzip -q "$CMDLINE_ZIP" -d "$TMP_UNPACK"
-            # sdkmanager 要求装在 cmdline-tools/latest 下
             mv "$TMP_UNPACK/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
             rm -rf "$TMP_UNPACK"
           fi
 
-          # 自动接受许可
           mkdir -p "$ANDROID_HOME/licenses" || true
           yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
 
@@ -97,85 +100,130 @@ jobs:
             "build-tools;${ANDROID_BUILD_TOOLS}" \
             "platform-tools"
 
-      - name: Build Debug APK (gradle assembleDebug)
+      - name: Decode release keystore (if secret PIANOSHELF_KEYSTORE_BASE64 is set)
+        id: keystore
         run: |
           set -euo pipefail
-          # AGP 需要知道 local.properties 里的 sdk.dir；用 ANDROID_HOME 生成一份即可
+          TARGET="$PIANOSHELF_KEYSTORE_FILE"
+          if [ -n "${{ secrets.PIANOSHELF_KEYSTORE_BASE64 }}" ]; then
+            echo '::group::Decoding keystore from secret PIANOSHELF_KEYSTORE_BASE64'
+            echo "${{ secrets.PIANOSHELF_KEYSTORE_BASE64 }}" | base64 -d > "$TARGET"
+            ls -la "$TARGET"
+            echo "decoded=yes" >> "$GITHUB_OUTPUT"
+            echo '::endgroup::'
+          else
+            echo "::warning::PIANOSHELF_KEYSTORE_BASE64 not set. Release APK will be signed with SDK debug keystore (fallback in pianoshelf.gradle)."
+            echo "decoded=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Debug + Release APKs
+        run: |
+          set -euo pipefail
           echo "sdk.dir=$ANDROID_HOME" > local.properties
+          # 同时构建 Debug 和 Release；Release 签名逻辑见 pianoshelf.gradle
           gradle --no-daemon --stacktrace \
-            assembleDebug \
+            assembleDebug assembleRelease \
             -Dorg.gradle.jvmargs="-Xmx3072m -XX:MaxMetaspaceSize=1g -XX:-UseContainerSupport"
 
       - name: Locate outputs and compute checksums
         id: meta
         run: |
           set -euo pipefail
-          APK_DIR="build/outputs/apk/debug"
-          APK_SRC="$APK_DIR/app-debug.apk"
-          # 我们的项目是 rootProject=PianoShelf 单模块，AGP 默认输出 app-debug.apk
-          if [ -f "$APK_DIR/PianoShelf-debug.apk" ]; then
-            APK_SRC="$APK_DIR/PianoShelf-debug.apk"
-          elif [ -f "$APK_DIR/app-debug.apk" ]; then
-            APK_SRC="$APK_DIR/app-debug.apk"
-          else
-            echo "::error::APK not found under $APK_DIR. Listing:"
-            ls -R "$APK_DIR" || true
-            exit 1
-          fi
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
 
-          APK_NAME="PianoShelf-debug-$(echo "${GITHUB_SHA}" | cut -c1-7).apk"
-          mv "$APK_SRC" "$APK_DIR/$APK_NAME"
+          locate_apk() {
+            # $1 = build type: debug|release
+            local type="$1"
+            local dir="build/outputs/apk/${type}"
+            local src=""
+            # AGP 单模块输出默认名 app-${type}.apk；我们不假定，直接按目录找
+            local candidate=$(find "$dir" -maxdepth 2 -type f -name "*.apk" | head -n1 || true)
+            if [ -z "$candidate" ]; then
+              echo "::error::No .apk found under $dir. Listing:"
+              ls -R "$dir" || true
+              exit 1
+            fi
+            src="$candidate"
+            local final_name="PianoShelf-${type}-${SHORT_SHA}.apk"
+            mv "$src" "$dir/$final_name"
+            ( cd "$dir" && sha256sum "$final_name" > "$final_name.sha256" )
+            echo "${type}_dir=$dir"
+            echo "${type}_src=$dir/$final_name"
+            echo "${type}_name=$final_name"
+            echo "${type}_sha=$dir/$final_name.sha256"
+          }
 
-          cd "$APK_DIR"
-          sha256sum "$APK_NAME" > "$APK_NAME.sha256"
-          echo "apk_path=$APK_DIR/$APK_NAME"         >> "$GITHUB_OUTPUT"
-          echo "apk_name=$APK_NAME"                   >> "$GITHUB_OUTPUT"
-          echo "apk_dir=$APK_DIR"                     >> "$GITHUB_OUTPUT"
-          echo "sha_path=$APK_DIR/$APK_NAME.sha256"   >> "$GITHUB_OUTPUT"
+          {
+            locate_apk debug
+            locate_apk release
+          } >> "$GITHUB_OUTPUT"
 
-          echo "--- build metadata ---"
-          echo "APK=$APK_DIR/$APK_NAME"
-          cat "$APK_NAME.sha256"
+          echo "--- Debug APK ---"
+          cat "${{ steps.meta.outputs.debug_sha }}"
+          ls -la "${{ steps.meta.outputs.debug_src }}"
+          echo "--- Release APK ---"
+          cat "${{ steps.meta.outputs.release_sha }}"
+          ls -la "${{ steps.meta.outputs.release_src }}"
 
-      - name: Upload APK artifact
+      - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: PianoShelf-debug-apk
           path: |
-            ${{ steps.meta.outputs.apk_path }}
-            ${{ steps.meta.outputs.sha_path }}
+            ${{ steps.meta.outputs.debug_src }}
+            ${{ steps.meta.outputs.debug_sha }}
           if-no-files-found: error
-          # artifact 默认保留 90 天（免费仓库）
           retention-days: 90
 
-      - name: Summary (Job summary with direct download hint)
+      - name: Upload Release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PianoShelf-release-apk
+          path: |
+            ${{ steps.meta.outputs.release_src }}
+            ${{ steps.meta.outputs.release_sha }}
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Job summary
         run: |
           {
             echo "### Build completed ✅"
             echo
-            echo "- Artifact name: **PianoShelf-debug-apk**"
-            echo "- APK file: \`${{ steps.meta.outputs.apk_name }}\`"
-            echo "- SHA-256: \`$(awk '{print $1}' ${{ steps.meta.outputs.sha_path }})\`"
+            echo "- Keystore provided: **${{ steps.keystore.outputs.decoded == 'yes' && 'YES (custom)' || 'NO (signed with SDK debug.keystore)' }}**"
             echo
-            echo "Download path: go to the **Summary** tab of this run, scroll to **Artifacts**."
+            echo "| Variant | Artifact name | File | SHA-256 |"
+            echo "|---|---|---|---|"
+            echo "| Debug | PianoShelf-debug-apk | \`${{ steps.meta.outputs.debug_name }}\` | \`$(awk '{print $1}' ${{ steps.meta.outputs.debug_sha }})\` |"
+            echo "| Release | PianoShelf-release-apk | \`${{ steps.meta.outputs.release_name }}\` | \`$(awk '{print $1}' ${{ steps.meta.outputs.release_sha }})\` |"
+            echo
+            echo "Download: open **Summary** tab → scroll to **Artifacts** section."
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # 可选：打 tag 时把 APK 上传到 GitHub Release Draft
-  release-upload:
+  # 打 tag v* 时：把 Debug + Release APK 一起挂到 GitHub Draft Release
+  draft-release:
     name: Draft Release (on tag)
-    needs: build-debug-apk
+    needs: build-apk
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     runs-on: ubuntu-latest
     steps:
-      - name: Download APK artifact
+      - name: Download Debug APK artifact
         uses: actions/download-artifact@v4
         with:
           name: PianoShelf-debug-apk
           path: apk/
+      - name: Download Release APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: PianoShelf-release-apk
+          path: apk/
 
-      - name: Create GitHub Release (draft) + upload APK
+      - name: Enumerate files before release upload
+        run: ls -la apk/
+
+      - name: Create GitHub Release (draft) + upload Debug & Release APKs
         uses: softprops/action-gh-release@v2
         with:
           draft: true
@@ -185,3 +233,5 @@ jobs:
           files: |
             apk/PianoShelf-debug-*.apk
             apk/PianoShelf-debug-*.sha256
+            apk/PianoShelf-release-*.apk
+            apk/PianoShelf-release-*.sha256
