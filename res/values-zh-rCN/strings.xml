@@ -4,6 +4,7 @@
 	<string name="tab_browse">浏览乐谱</string>
 	<string name="tab_recent">最近打开</string>
 	<string name="tab_favorite">收藏夹</string>
+	<string name="tab_online">在线乐谱</string>
 	<string name="info_add_favorite">添加收藏</string>
 	<string name="info_remove_favorite">移除收藏</string>
 	<string name="info_canot_read">文件不可读</string>
@@ -12,6 +13,7 @@
 	<string name="info_page_no">第%d页</string>
 	<string name="dis_back_root">根目录</string>
 	<string name="dis_back_up">上级目录[%s]</string>
+	<string name="menu_online_score">在线乐谱</string>
 	<string name="menu_setting">设置</string>
 	<string name="menu_exit">退出</string>
 	<string name="menu_pageup">上一页</string>
@@ -25,6 +27,36 @@
 	<string name="per_sound">声音设置</string>
 	<string name="per_other">其它设置</string>
 	<string name="per_max_recent">历史记录数</string>
+
+	<!-- ================= 在线乐谱模块 ================= -->
+	<!-- Tab 欢迎卡片 -->
+	<string name="tab_online_guide_title">在线下载 MusicXML 乐谱</string>
+	<string name="tab_online_guide_desc">支持从 MuseScore、IMSLP、Mutopia 等免费平台下载乐谱，粘贴文件直链即可一键下载打开。</string>
+
+	<!-- 下载页 -->
+	<string name="online_url_title">粘贴乐谱链接</string>
+	<string name="online_url_hint">https://... (.xml / .mxl / .musicxml) 结尾</string>
+	<string name="online_btn_download">下载并打开</string>
+	<string name="online_btn_paste">粘贴</string>
+	<string name="online_btn_visit">访问</string>
+	<string name="online_btn_enter">进入下载</string>
+
+	<string name="online_pasted_ok">已从剪贴板粘贴</string>
+	<string name="online_paste_empty">剪贴板为空</string>
+	<string name="online_browser_fail">无法打开浏览器</string>
+	<string name="online_no_network_permission">缺少网络权限</string>
+
+	<string name="online_platform_title">推荐免费 MusicXML 平台</string>
+	<string name="online_help_title">使用说明</string>
+	<string name="online_help_desc">1. 点击上方平台卡片，在浏览器中打开对应网站。\n2. 找到你要的乐谱，复制该乐谱 .xml 或 .mxl 文件的直接下载链接。\n3. 返回本页面，粘贴 URL 后点击「下载并打开」即可自动加载。\n\n小技巧：MuseScore（公有领域免费）和 IMSLP（经典乐谱）是最常用的来源。在 MuseScore.com 打开乐谱 → 分享 → 下载 → MusicXML → 复制链接。</string>
+
+	<!-- 下载状态 -->
+	<string name="online_status_connecting">正在连接服务器…</string>
+	<string name="online_status_downloading">下载进度 %1$d%%</string>
+	<string name="online_status_downloading_unknown">正在下载…（大小未知）</string>
+	<string name="online_status_done">已保存为 %1$s，正在打开…</string>
+	<string name="online_status_fail">下载失败</string>
+	<string name="online_open_ok">下载完成！</string>
 	<string-array name="list_colour">
 		<item>红</item>
 		<item>蓝</item>

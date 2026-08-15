@@ -12,6 +12,7 @@ import android.widget.LinearLayout;
 import android.widget.TabHost;
 import android.widget.TabWidget;
 import android.widget.TabHost.OnTabChangeListener;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -53,6 +54,8 @@ public class PianoShelfActivity extends AppCompatActivity {
 					getText(R.string.tab_recent)));
 			mTabHost.addTab(mTabHost.newTabSpec("favorite").setContent(R.id.tab_favorite)
 					.setIndicator(getText(R.string.tab_favorite)));
+			mTabHost.addTab(mTabHost.newTabSpec("online").setContent(R.id.tab_online)
+					.setIndicator(getText(R.string.tab_online)));
 
 			LinearLayout ll = (LinearLayout) this.findViewById(R.id.tab_browse);
 			tbl = new TabBrowseList(this);
@@ -63,6 +66,8 @@ public class PianoShelfActivity extends AppCompatActivity {
 			ll = (LinearLayout) this.findViewById(R.id.tab_favorite);
 			tfl = new TabFavoriteList(this);
 			ll.addView(tfl);
+			ll = (LinearLayout) this.findViewById(R.id.tab_online);
+			ll.addView(new TabOnlineWelcome(this));
 
 			mTabHost.setOnTabChangedListener(new OnTabChangeListener() {
 				@Override
@@ -121,8 +126,9 @@ public class PianoShelfActivity extends AppCompatActivity {
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
 		int group1 = 1;
-		menu.add(group1, 1, 1, getString(R.string.menu_setting));
-		menu.add(group1, 2, 2, getString(R.string.menu_exit));
+		menu.add(group1, 1, 1, getString(R.string.menu_online_score));
+		menu.add(group1, 2, 2, getString(R.string.menu_setting));
+		menu.add(group1, 3, 3, getString(R.string.menu_exit));
 		return true;
 	}
 
@@ -130,15 +136,27 @@ public class PianoShelfActivity extends AppCompatActivity {
 	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 			case 1:
+				if (checkNetworkPermissionGranted()) {
+					startActivity(new Intent(this, OnlineScoreActivity.class));
+				} else {
+					Toast.makeText(this, R.string.online_no_network_permission, Toast.LENGTH_LONG).show();
+				}
+				break;
+			case 2:
 				Intent intent = new Intent();
 				intent.setClass(this, AppPreferenceActivity.class);
 				startActivity(intent);
 				break;
-			case 2:
+			case 3:
 				// Graceful finish; avoid System.exit to respect Android task stack.
 				finishAffinity();
 				break;
 		}
+		return true;
+	}
+
+	/** INTERNET 是正常权限，声明即获得；这里仅保留钩子（如果后面加上 NETWORK_STATE 等再扩展）。 */
+	private boolean checkNetworkPermissionGranted() {
 		return true;
 	}
 

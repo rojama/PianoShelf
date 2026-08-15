@@ -10,6 +10,7 @@
     <string name="tab_browse">Browse</string>
     <string name="tab_recent">Recent</string>
     <string name="tab_favorite">Favorites</string>
+    <string name="tab_online">Online</string>
 
     <string name="info_add_favorite">Added to favorites</string>
     <string name="info_remove_favorite">Removed from favorites</string>
@@ -21,6 +22,7 @@
     <string name="dis_back_root">Go to root directory</string>
     <string name="dis_back_up">Go up: %s</string>
 
+    <string name="menu_online_score">Online scores</string>
     <string name="menu_setting">Settings</string>
     <string name="menu_exit">Exit</string>
     <string name="menu_pageup">Previous page</string>
@@ -35,6 +37,36 @@
     <string name="per_sound">Sound</string>
     <string name="per_other">Other</string>
     <string name="per_max_recent">Max recent history</string>
+
+    <!-- ================= Online Score Module ================= -->
+    <!-- Tab welcome card -->
+    <string name="tab_online_guide_title">Download Online MusicXML</string>
+    <string name="tab_online_guide_desc">Browse free MusicXML from MuseScore, IMSLP, Mutopia and more, paste a direct URL to download and open instantly.</string>
+
+    <!-- Downloader page -->
+    <string name="online_url_title">Paste score URL</string>
+    <string name="online_url_hint">https://...  (.xml / .mxl / .musicxml)</string>
+    <string name="online_btn_download">Download &amp; Open</string>
+    <string name="online_btn_paste">Paste</string>
+    <string name="online_btn_visit">Visit</string>
+    <string name="online_btn_enter">Enter Downloader</string>
+
+    <string name="online_pasted_ok">Pasted from clipboard</string>
+    <string name="online_paste_empty">Clipboard is empty</string>
+    <string name="online_browser_fail">Cannot open browser for</string>
+    <string name="online_no_network_permission">INTERNET permission missing</string>
+
+    <string name="online_platform_title">Free MusicXML Platforms (recommended)</string>
+    <string name="online_help_title">How it works</string>
+    <string name="online_help_desc">1. Tap a platform above to visit its website in your browser.\n2. Find the score you want and copy the direct download link (.xml / .mxl).\n3. Come back and paste the URL above to download and open it automatically.\n\nTip: MuseScore (public domain) and IMSLP (classical) are the best free sources. On MuseScore.com open a score → Share → Download → MusicXML → copy link.</string>
+
+    <!-- Download status -->
+    <string name="online_status_connecting">Connecting…</string>
+    <string name="online_status_downloading">Downloading %1$d%%</string>
+    <string name="online_status_downloading_unknown">Downloading… (size unknown)</string>
+    <string name="online_status_done">Saved as %1$s, opening…</string>
+    <string name="online_status_fail">Download failed</string>
+    <string name="online_open_ok">Download complete!</string>
 
     <string-array name="list_colour">
         <item>Red</item>

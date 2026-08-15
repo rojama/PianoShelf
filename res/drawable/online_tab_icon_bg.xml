@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 在线乐谱 Tab 入口图标背景（圆形 + 渐变色），代替复杂的矢量图资源 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:startColor="#3F51B5"
+        android:centerColor="#5C6BC0"
+        android:endColor="#7986CB"
+        android:angle="270" />
+</shape>

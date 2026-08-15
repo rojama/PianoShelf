@@ -67,6 +67,14 @@
             android:label="@string/per_display"
             android:theme="@style/Theme.PianoShelf.Settings" />
 
+        <!-- 在线乐谱下载页面：URL 输入 + 推荐平台 + 下载进度 -->
+        <activity
+            android:name=".OnlineScoreActivity"
+            android:exported="false"
+            android:label="@string/tab_online"
+            android:theme="@style/Theme.PianoShelf.Settings"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout" />
+
         <!--
             FileProvider: exposes specific files (e.g. external storage .xml/.mxl)
             to GraphicsActivity as content:// URIs (avoids FileUriExposedException

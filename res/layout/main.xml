@@ -16,6 +16,11 @@
                 <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/tab_favorite">
                     <ListView android:layout_weight="1" android:layout_height="wrap_content" android:id="@+id/listView_favorite" android:layout_width="match_parent"></ListView>
                 </LinearLayout>
+                <!-- Tab 4: 在线乐谱入口容器 -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/tab_online"
+                    android:orientation="vertical"
+                    android:gravity="center_horizontal"
+                    android:padding="16dp" />
             </FrameLayout>
         </LinearLayout>
     </TabHost>

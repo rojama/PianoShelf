@@ -1076,3 +1076,138 @@ db.execSQL("delete from RECENT where filepath = '" + filepath + "';");
 | **UI 主题** | 老式 Android 2.x 风格 | Material Design (现代) |
 | **资源泄漏** | Cursor/Thread/SoundPool 未释放 | finally + onDestroy 统一释放 |
 | **代码规范** | Deprecated API 滥用 | 全部替换为当前推荐 API |
+
+---
+
+## 12. 新增功能：在线 MusicXML 乐谱下载 & 打开
+
+> 在「本地文件浏览」之外新增了 **Tab 4（在线乐谱）**，支持从推荐的免费 MusicXML 分享平台下载乐谱并直接打开，打通从网络到渲染播放的完整链路。
+
+### 12.1 推荐的免费在线 MusicXML 平台
+
+经过调研，选择 **4 个完全免费 / 公有领域** 主流平台作为内置推荐（预置在 `OnlineScoreDownloader.PRESET_PLATFORMS`）：
+
+| 平台 | 规模 | MusicXML 情况 | 卡片跳转 URL |
+|------|------|--------------|-------------|
+| **MuseScore** | 100 万+乐谱，全球最大社区 | 公有领域作品可**免费下载 MusicXML**；PRO 订阅可下载版权作品 | https://musescore.com/sheetmusic |
+| **IMSLP (Petrucci)** | 18 万+公有领域经典乐谱（巴赫/贝多芬/莫扎特等） | 部分 PDF 包含 **MusicXML 附件**，完全免费 | https://imslp.org/wiki/Main_Page |
+| **Mutopia Project** | LilyPond 志愿者高质量排版，古典乐 | 每份乐谱均提供 **MusicXML + PDF 双格式** 免费下载 | http://www.mutopiaproject.org/ |
+| **OpenScore (MuseScore)** | 公有领域交互式乐谱开源项目 | MuseScore / MusicXML / PDF / MIDI / MP3 / 盲文 格式齐全 | https://musescore.com/openscore |
+
+> 使用流程（以 MuseScore 为例）：MuseScore.com 打开乐谱 → Share → Download → 选择 MusicXML → 复制链接 → 返回 App 粘贴 URL → 下载自动打开。
+
+---
+
+### 12.2 新增文件 & 依赖
+
+#### 12.2.1 Gradle 依赖升级
+在 [pianoshelf.gradle](file:///workspace/pianoshelf.gradle#L66-L79) 增加 OkHttp 4.x 网络栈：
+```gradle
+implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+```
+（OkHttp 自带连接池、gzip 透明解压、HTTP/2、TLS 兼容，是 Android 工业级标准选择。）
+
+#### 12.2.2 新增 Java 源代码
+
+| 文件 | 位置 | 职责 |
+|------|------|------|
+| **OnlineScoreDownloader.java** | [OnlineScoreDownloader.java](file:///workspace/src/com/rojama/pianoshelf/OnlineScoreDownloader.java) | **下载核心**：OkHttp 封装、URL 校验、SHA-256 缓存、进度回调、预置平台信息 |
+| **OnlineScoreActivity.java** | [OnlineScoreActivity.java](file:///workspace/src/com/rojama/pianoshelf/OnlineScoreActivity.java) | **下载页**：URL 输入 + 粘贴按钮 + 进度条 + 推荐平台卡片 + 启动 GraphicsActivity |
+| **TabOnlineWelcome.java** | [TabOnlineWelcome.java](file:///workspace/src/com/rojama/pianoshelf/TabOnlineWelcome.java) | **主界面 Tab 4 入口**：引导卡片 + 跳转按钮 |
+
+#### 12.2.3 新增资源文件
+
+| 文件 | 位置 | 用途 |
+|------|------|------|
+| `res/layout/online_score.xml` | [online_score.xml](file:///workspace/res/layout/online_score.xml) | 下载页布局：URL 输入、进度条、平台容器、帮助卡片 |
+| `res/layout/online_platform_item.xml` | [online_platform_item.xml](file:///workspace/res/layout/online_platform_item.xml) | 单条平台卡片（CardView），OnlineScoreActivity 动态加载 |
+| `res/layout/tab_online_welcome.xml` | [tab_online_welcome.xml](file:///workspace/res/layout/tab_online_welcome.xml) | Tab 4 入口引导卡片布局 |
+| `res/drawable/online_tab_icon_bg.xml` | [online_tab_icon_bg.xml](file:///workspace/res/drawable/online_tab_icon_bg.xml) | 在线 Tab 图标圆形渐变背景（替代复杂矢量图） |
+
+---
+
+### 12.3 核心架构设计
+
+#### 12.3.1 OnlineScoreDownloader 设计要点
+
+```
+调用方 (UI 线程)
+   │  downloadAsync(context, url, force, callback)
+   ▼
+URL 校验 (http/https + .xml/.mxl/.musicxml 后缀)
+   │ 通过
+   ▼
+计算缓存文件 = cacheDir/online_scores/ + SHA-256(url).hex + 扩展名
+   │
+   ├─► 存在 && !force → 直接 postOk (命中缓存，0 流量)
+   │
+   └─► 不存在 → new Thread("PianoShelf-Downloader"):
+              ├─ OkHttp.newCall().execute() (15s 连接 / 60s 读超时)
+              ├─ 读取 Content-Length（未知则 -1）
+              ├─ .part 临时文件写入 + 每 BUFFER_SIZE 刷新进度
+              ├─ fsync() 保证刷盘
+              └─ renameTo() 原子替换 → postOk
+                      │
+                      ▼
+           Handler(Looper.getMainLooper()) 统一分发回调 (onProgress/onSuccess/onFailure)
+```
+
+**关键特性**：
+- **SHA-256 去重缓存**：相同 URL 不会重复下载，节省流量
+- **.part 原子写入**：避免下载中断导致的损坏文件
+- **主线程回调**：UI 代码无需关心线程切换
+- **文件大小限制**：MusicXML 纯文本一般 < 5MB；压缩 MXL 更小，不会 OOM
+- **缓存清理 API**：`clearCache(context)` 可一键释放磁盘空间
+
+#### 12.3.2 OnlineScoreActivity 交互流程
+
+```
+用户进入 Tab 4 「在线乐谱」
+   │
+   ├─► 点击「进入下载」或 菜单项「在线乐谱」
+   │
+   ▼
+OnlineScoreActivity
+   ├─ URL 输入框 (http/https + xml/mxl/musicxml 结尾校验)
+   ├─ 「粘贴」按钮 → 读 ClipboardManager 首项文本
+   ├─ 「下载并打开」按钮 → 调用 OnlineScoreDownloader.downloadAsync
+   │     ├─ 进度条 (Content-Length 已知 = 确定进度；未知 = 不确定动画)
+   │     ├─ 失败 → Toast 显示错误
+   │     └─ 成功 → 写入最近记录 → FileProvider 包装 → startActivity(GraphicsActivity)
+   │
+   └─ 推荐平台 4 张卡片（动态构建）
+         └─ 点击 → Intent.ACTION_VIEW 打开外部浏览器
+```
+
+---
+
+### 12.4 与现有模块的集成点
+
+| 集成点 | 说明 |
+|-------|------|
+| **主界面 Tab** | [main.xml](file:///workspace/res/layout/main.xml#L19-L23) 新增 `tab_online` 容器；[PianoShelfActivity.java](file:///workspace/src/com/rojama/pianoshelf/PianoShelfActivity.java#L57-L70) 注册第 4 个 Tab，挂载 `TabOnlineWelcome` |
+| **菜单项** | 主界面选项菜单新增 **「在线乐谱」** 入口（与设置/退出并列） |
+| **最近记录** | 在线下载成功后，**本地缓存路径写入 DatabaseHelper RECENT 表**，下次可从「最近打开」直接再次打开（无需重下） |
+| **FileProvider** | 下载完成后走与本地文件**完全一致**的启动通路：`FileProvider.getUriForFile()` + `FLAG_GRANT_READ_URI_PERMISSION` → GraphicsActivity，避免重复开发打开逻辑 |
+| **权限** | `INTERNET`（正常权限，Manifest 声明即获得）已在原 Manifest 中存在，直接复用 |
+| **多语言** | [values/strings.xml](file:///workspace/res/values/strings.xml) + [values-zh-rCN/strings.xml](file:///workspace/res/values-zh-rCN/strings.xml) 各新增约 25 个在线模块专用字符串键，中英文完全同步 |
+
+---
+
+### 12.5 用户使用路径总结
+
+```
+【路径 1】主界面 → Tab 4「在线」 → 卡片「进入下载」
+        ↓
+     URL 输入框 粘贴 或 访问推荐平台复制直链
+        ↓
+     下载 → 自动跳转 GraphicsActivity 渲染 + 播放
+        ↓
+     之后可直接在「最近打开」Tab 重新打开（缓存命中）
+
+【路径 2】主界面 → 菜单键 → 「在线乐谱」
+        ↓（直接跳到 OnlineScoreActivity）
+     同上流程
+```
+
+所有在线下载的乐谱都会被自动加入「最近打开」列表，并且缓存到 `{app_cache}/online_scores/` 目录，在存储空间足够的情况下可以零流量重开。
