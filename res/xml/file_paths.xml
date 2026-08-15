@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FileProvider path configuration.
+
+    Declares which directories the FileProvider is allowed to expose to
+    other components. For PianoShelf we need access to:
+      - external storage root (musicxml scores are browsed from there)
+      - app cache dir (extracted mxl temp files are created here)
+      - internal files dir
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Environment.getExternalStorageDirectory() and sub-paths -->
+    <external-path name="external_files" path="." />
+
+    <!-- Context.getExternalFilesDir(null) and sub-paths -->
+    <external-files-path name="app_external_files" path="." />
+
+    <!-- Context.getCacheDir() and sub-paths (for temp extracted .mxl) -->
+    <cache-path name="app_cache" path="." />
+
+    <!-- Context.getFilesDir() and sub-paths -->
+    <files-path name="app_files" path="." />
+</paths>

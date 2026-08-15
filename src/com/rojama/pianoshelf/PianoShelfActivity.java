@@ -1,22 +1,36 @@
 package com.rojama.pianoshelf;
 
-import android.app.Activity;
-import android.content.Context;
+import android.Manifest;
 import android.content.Intent;
-import android.media.AudioManager;
-import android.media.SoundPool;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.widget.LinearLayout;
 import android.widget.TabHost;
 import android.widget.TabWidget;
 import android.widget.TabHost.OnTabChangeListener;
+import android.widget.Toast;
 
-public class PianoShelfActivity extends Activity {
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+/**
+ * 主界面 (入口 Activity)
+ *
+ * 修复 / Modernization:
+ *  - 继承 AppCompatActivity 以便使用 AndroidX Toolbar/Lifecycle
+ *  - 移除 onDestroy 中的 System.exit(0)（违反 Android 生命周期/任务栈设计）
+ *  - onDestroy 显式释放 SoundPool 资源
+ *  - Android 6.0+ 动态申请外部存储读写权限（否则 Browse/Recent/Favorite 全部为空）
+ */
+public class PianoShelfActivity extends AppCompatActivity {
 	private static final String TAG = "PianoShelf";
+	private static final int REQ_STORAGE = 1000;
 	public TabHost mTabHost = null;
 	public TabWidget mTabWidget = null;
 	public DatabaseHelper dbhelp;
@@ -24,12 +38,10 @@ public class PianoShelfActivity extends Activity {
 	TabRecentList trl;
 	TabFavoriteList tfl;
 
-	/** Called when the activity is first created. */
 	@Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
-
 		try {
 			dbhelp = new DatabaseHelper(this);
 
@@ -42,6 +54,8 @@ public class PianoShelfActivity extends Activity {
 					getText(R.string.tab_recent)));
 			mTabHost.addTab(mTabHost.newTabSpec("favorite").setContent(R.id.tab_favorite)
 					.setIndicator(getText(R.string.tab_favorite)));
+			mTabHost.addTab(mTabHost.newTabSpec("online").setContent(R.id.tab_online)
+					.setIndicator(getText(R.string.tab_online)));
 
 			LinearLayout ll = (LinearLayout) this.findViewById(R.id.tab_browse);
 			tbl = new TabBrowseList(this);
@@ -52,6 +66,8 @@ public class PianoShelfActivity extends Activity {
 			ll = (LinearLayout) this.findViewById(R.id.tab_favorite);
 			tfl = new TabFavoriteList(this);
 			ll.addView(tfl);
+			ll = (LinearLayout) this.findViewById(R.id.tab_online);
+			ll.addView(new TabOnlineWelcome(this));
 
 			mTabHost.setOnTabChangedListener(new OnTabChangeListener() {
 				@Override
@@ -62,39 +78,57 @@ public class PianoShelfActivity extends Activity {
 						tfl.getFileDir();
 					}
 				}
-			});							
-			
-			//��̨��������
+			});
+
+			// 后台加载音符资源（耗时）
 			LoadThread load = new LoadThread();
 			load.context = this;
-			load.start();			
+			load.start();
+
+			// 动态请求存储权限 (Android 6.0+)
+			requestStoragePermissionIfNeeded();
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-
 	}
-	
-	public class LoadThread extends Thread
-	{
-		public Context context;
-		public void run()
-		{					
+
+	private void requestStoragePermissionIfNeeded() {
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+		int r = ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
+		if (r != PackageManager.PERMISSION_GRANTED) {
+			ActivityCompat.requestPermissions(this,
+					new String[]{ Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE },
+					REQ_STORAGE);
+		}
+	}
+
+	@Override
+	public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+		if (requestCode == REQ_STORAGE && grantResults.length > 0) {
+			if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+				// 刷新列表显示
+				if (tbl != null) tbl.getFileDir();
+				if (trl != null) trl.getFileDir();
+				if (tfl != null) tfl.getFileDir();
+			}
+		}
+	}
+
+	public class LoadThread extends Thread {
+		public android.content.Context context;
+		public void run() {
 			SoundPoolUtiil.loadSound(context);
-			System.out.println("Load music complease");
 		}
 	}
 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
-		// Group 1
 		int group1 = 1;
-		menu.add(group1, 1, 1, getString(R.string.menu_setting));
-		menu.add(group1, 2, 2, getString(R.string.menu_exit));
-		// Group 2
-		int group2 = 2;
-		menu.add(group2, 3, 3, "g2.item1");
-		menu.add(group2, 4, 4, "g2.item2");
-		// It is important to return true to see the menu
+		menu.add(group1, 1, 1, getString(R.string.menu_online_score));
+		menu.add(group1, 2, 2, getString(R.string.menu_setting));
+		menu.add(group1, 3, 3, getString(R.string.menu_exit));
 		return true;
 	}
 
@@ -102,22 +136,37 @@ public class PianoShelfActivity extends Activity {
 	public boolean onOptionsItemSelected(MenuItem item) {
 		switch (item.getItemId()) {
 			case 1:
+				if (checkNetworkPermissionGranted()) {
+					startActivity(new Intent(this, OnlineScoreActivity.class));
+				} else {
+					Toast.makeText(this, R.string.online_no_network_permission, Toast.LENGTH_LONG).show();
+				}
+				break;
+			case 2:
 				Intent intent = new Intent();
 				intent.setClass(this, AppPreferenceActivity.class);
 				startActivity(intent);
 				break;
-			case 2:
-				this.finish();
+			case 3:
+				// Graceful finish; avoid System.exit to respect Android task stack.
+				finishAffinity();
 				break;
 		}
-		// for items handled
 		return true;
-
 	}
-	
+
+	/** INTERNET 是正常权限，声明即获得；这里仅保留钩子（如果后面加上 NETWORK_STATE 等再扩展）。 */
+	private boolean checkNetworkPermissionGranted() {
+		return true;
+	}
+
 	@Override
-	public void onDestroy(){
-		System.exit(0);
+	public void onDestroy() {
+		SoundPoolUtiil.release();
+		if (dbhelp != null) {
+			try { dbhelp.close(); } catch (Throwable ignored) {}
+			dbhelp = null;
+		}
+		super.onDestroy();
 	}
-
 }

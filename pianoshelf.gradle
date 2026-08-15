@@ -1,0 +1,84 @@
+// Single-module Android application build.gradle
+// This project was migrated from legacy Ant-based build and extended with
+// online MusicXML browsing/download features (Mutopia catalog + platform WebView).
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.rojama.pianoshelf'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.rojama.pianoshelf"
+        minSdk 21
+        targetSdk 34
+        versionCode 3
+        versionName "2.1.0-online-catalog"
+    }
+
+    // Source sets kept identical to legacy Ant layout so we don't need to move files.
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            // 注意：src/ 下既包含应用代码 com.rojama.pianoshelf，
+            // 也包含 Zong MusicXML 解析器的源码 com.xenoage.zong（含 Mxl* 绑定、符号等子包）。
+            // 这些源码必须一起编译（lib/*.jar 只提供 Zong 的 core/io/pdlib 运行时层）。
+            // 所有源码现已统一为 UTF-8 编码，不再有 unmappable character 问题。
+            java.srcDirs = ['src']
+            resources.srcDirs = ['src']
+            aidl.srcDirs = ['src']
+            renderscript.srcDirs = ['src']
+            res.srcDirs = ['res']
+            if (file('assets').isDirectory()) assets.srcDirs = ['assets']
+            if (file('libs').isDirectory())   jniLibs.srcDirs = ['libs']
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+        // 全部源码已统一转换为 UTF-8（包括中文注释），使用默认 encoding 即可
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            // debug 用 applicationId 后缀避免与 release 冲突，可选；此处不加以简化安装
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard.cfg'
+        }
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+        disable 'GradleDeprecated', 'OldTargetApi', 'Deprecated', 'ObsoleteSdkInt',
+                'AllowBackup', 'ExplicitSystem'
+    }
+
+    packagingOptions {
+        // 旧 jars (Zong core/util/pdlib) 常带重复的 META-INF，直接忽略
+        resources {
+            excludes += ['META-INF/LICENSE', 'META-INF/NOTICE', 'META-INF/license',
+                         'META-INF/notice', 'META-INF/DEPENDENCIES', 'META-INF/ASL2.0',
+                         'META-INF/LGPL2.1']
+        }
+    }
+}
+
+// ----- 依赖 -----
+dependencies {
+    // AndroidX / Material
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.preference:preference:1.2.1'
+    implementation 'androidx.core:core:1.12.0'
+
+    // 网络：OkHttp（Mutopia Catalog + OnlineDownloader + WebView 拦截内部下载）
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    // 原 Ant 构建下的 3 个本地 jars（Zong MusicXML 解析）：core.jar / pdlib.jar / util.jar
+    implementation fileTree(dir: 'lib', include: ['*.jar'])
+}

@@ -66,7 +66,7 @@ public final class MxlMeasure {
 		// TODO Auto-generated method stub
 		pt.nowMeasure++;
 
-		// ³õÊ¼»¯²ÎÊı
+		// åˆå§‹åŒ–å‚æ•°
 		// pt.nowLine = 1;
 		// pt.lastNoteX = -1;
 		pt.oldX = 0;
@@ -89,7 +89,7 @@ public final class MxlMeasure {
 		// pt.measureUp = pt.measureUpAll.get(pt.nowLine);
 		for (Integer num : pt.nowClefType.keySet()) {
 			pt.measureUp = pt.getMeasureUp(num);
-			// ´òÎåÏßÆ×
+			// æ‰“äº”çº¿è°±
 			for (int i = 0; i < 5; i++) {
 				pt.drawLine(pt.measureLeft, pt.measureUp + i * 10,
 						pt.measureLeft + pt.measureWidth, pt.measureUp + i * 10);
@@ -99,20 +99,20 @@ public final class MxlMeasure {
 			// pt.measureLeft + pt.measureWidth, pt.measureUp);
 		}
 
-		// ¼ÇÂ¼Ê×Ä©ĞĞµÄY×ø±ê
+		// è®°å½•é¦–æœ«è¡Œçš„Yåæ ‡
 		float firstY = pt.getMeasureUp(1), lastY = pt.getMeasureUp(pt.nowClefType.size()) + 4 * 10;
 
-		// »­·Ö¸îĞ¡½ÚÏß
+		// ç”»åˆ†å‰²å°èŠ‚çº¿
 		pt.drawLine(pt.measureLeft + pt.measureWidth, firstY, pt.measureLeft + pt.measureWidth,
 				lastY);
 		if (pt.isNewSystem) {
 			pt.drawLine(pt.measureLeft, firstY, pt.measureLeft, lastY);
 		}
 
-		// Ã¿ĞĞÏÈ´òÓ¡Æ×ºÅºÍµ÷ºÅ
+		// æ¯è¡Œå…ˆæ‰“å°è°±å·å’Œè°ƒå·
 		pt.oldX = 0;
 		if (pt.isNewSystem) {
-			// Èç¹ûÊÇ¶àĞĞµÄ´òÓ¡´óÀ¨ºÅ
+			// å¦‚æœæ˜¯å¤šè¡Œçš„æ‰“å°å¤§æ‹¬å·
 			float midY = (firstY + lastY) / 2;
 			float tempX = pt.measureLeft;
 			if (pt.nowClefType.size() > 1) {
@@ -121,7 +121,7 @@ public final class MxlMeasure {
 				tempX -= symbol.getBitmap().getWidth() + 5;
 				pt.drawBitmap(symbol.getBitmap(), tempX, y);
 			}
-			// µÚÒ»½Ú´òÓ¡Ãû³Æ
+			// ç¬¬ä¸€èŠ‚æ‰“å°åç§°
 			if (pt.nowMeasure == 1) {
 				pt.getPaint().setTextAlign(Align.RIGHT);
 				pt.getPaint().setTextSize(pt.ct.PART_NAME_SIZE);

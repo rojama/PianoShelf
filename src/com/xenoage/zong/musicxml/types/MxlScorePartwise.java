@@ -98,7 +98,7 @@ public final class MxlScorePartwise
 			  //ct.oldPartID = part.getID();
 		  }
 	  }
-	  //´òÓ¡Ò³Âë
+	  //æ‰“å°é¡µç 
 	  ct.paint.setTextSize(10);
 //	  ct.drawText(ct.getDisPageNo()+"/"+ct.nowPage, ct.getPageWidth()-50, 50);
   }

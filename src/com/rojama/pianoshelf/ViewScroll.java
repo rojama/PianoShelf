@@ -3,45 +3,55 @@ package com.rojama.pianoshelf;
 import android.app.Activity;
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.util.DisplayMetrics;
+import android.view.Gravity;
 import android.view.View;
-import android.widget.AbsoluteLayout;
+import android.widget.FrameLayout;
 import android.widget.ImageView.ScaleType;
 
 /**
- * Ò»¸ö¾ø¶Ô²¼¾Ö
- * 
- * @author Administrator
- * 
+ * ä¹è°±æ»šåŠ¨å®¹å™¨ï¼ˆæ›¿ä»£åŽŸ AbsoluteLayoutï¼‰ã€‚
+ *
+ * AbsoluteLayout åœ¨ API 23+ æ ‡è®°ä¸º deprecatedï¼ŒçŽ°ä»£ Android æŽ¨èä½¿ç”¨
+ * FrameLayout + Gravity/Margin æ¥å®žçŽ°å­è§†å›¾çš„å®šä½ã€‚è¿™é‡Œä¿ç•™äº†åŽŸå§‹
+ * ã€ŒæŒ‰å›¾ç‰‡å°ºå¯¸å±…ä¸­å¹¶é€‚é…å±å¹•ã€çš„è§†è§‰è¡Œä¸ºã€‚
  */
-@SuppressWarnings("deprecation")
-public class ViewScroll extends AbsoluteLayout {
-	private int screenW; // ¿ÉÓÃµÄÆÁÄ»¿í
-	private int screenH; // ¿ÉÓÃµÄÆÁÄ»¸ß ×Ü¸ß¶È-ÉÏÃæ×é¼þµÄ×Ü¸ß¶È
-	private int imgW; // Í¼Æ¬Ô­Ê¼¿í
-	private int imgH; // Í¼Æ¬Ô­Ê¼¸ß
+public class ViewScroll extends FrameLayout {
+	private int screenW;
+	private int screenH;
+	private int imgW;
+	private int imgH;
 	public TouchView tv;
 
+	@SuppressWarnings("deprecation")
 	public ViewScroll(Context context, Bitmap img, View topView) {
 		super(context);
-		screenW = ((Activity) context).getWindowManager().getDefaultDisplay().getWidth();
-		screenH = ((Activity) context).getWindowManager().getDefaultDisplay().getHeight()
-				- (topView == null ? 0 : topView.getBottom() + 50);
+		// Prefer DisplayMetrics over deprecated Display#getWidth / getHeight
+		DisplayMetrics dm = context.getResources().getDisplayMetrics();
+		screenW = dm.widthPixels;
+		int availableScreenH = dm.heightPixels;
+		int topOffset = (topView == null) ? 0 : (topView.getBottom() + 50);
+		screenH = Math.max(availableScreenH - topOffset, 1);
+
 		tv = new TouchView(context, screenW, screenH);
 		tv.setImageBitmap(img);
 		imgW = img.getWidth();
 		imgH = img.getHeight();
 		tv.imgW = imgW;
 		tv.imgH = imgH;
-		int layout_w = imgW > screenW ? screenW : imgW; // Êµ¼ÊÏÔÊ¾µÄ¿í
-		int layout_h = imgH > screenH ? screenH : imgH; // Êµ¼ÊÏÔÊ¾µÄ¸ß
-		if (layout_w == screenW || layout_h == screenH)
+
+		int layout_w = (imgW > screenW) ? screenW : imgW;
+		int layout_h = (imgH > screenH) ? screenH : imgH;
+
+		if (layout_w == screenW || layout_h == screenH) {
 			tv.setScaleType(ScaleType.CENTER_INSIDE);
-		tv.setLayoutParams(new AbsoluteLayout.LayoutParams(layout_w, layout_h,
-				layout_w == screenW ? 0 : (screenW - layout_w) / 2, layout_h == screenH ? 0
-						: (screenH - layout_h) / 2));
+		}
+
+		FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(layout_w, layout_h);
+		// Center within parent (equivalent to AbsoluteLayout centering)
+		lp.gravity = Gravity.CENTER;
+		tv.setLayoutParams(lp);
+
 		this.addView(tv);
 	}
-	
-	
 }

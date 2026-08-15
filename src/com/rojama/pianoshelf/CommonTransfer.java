@@ -23,9 +23,9 @@ public class CommonTransfer {
 	public final int PART_NAME_SIZE = 15;
 	public final int SPACE = 5;
 	public final int NOTE_LINE_HIGHT = 34;
-	public final int NOTE_WIDTH = 15; // Òô·û¿í¶ÈÓÃÓÚ¼æÈİÅĞ¶Ï½ô°¤µÄÁ½¸öÒô·ûÊÇ·ñÊÇÍ¬Ò»¸öÎ»ÖÃ
+	public final int NOTE_WIDTH = 15; // éŸ³ç¬¦å®½åº¦ç”¨äºå…¼å®¹åˆ¤æ–­ç´§æŒ¨çš„ä¸¤ä¸ªéŸ³ç¬¦æ˜¯å¦æ˜¯åŒä¸€ä¸ªä½ç½®
 
-	//Ã¿Ò»²¿·ÖµÄËùÓĞµÄPaintTransfer
+	//æ¯ä¸€éƒ¨åˆ†çš„æ‰€æœ‰çš„PaintTransfer
 	public Map<String, PaintTransfer> oldPaintTransfer = new HashMap<String, PaintTransfer>();
 	public String oldPartID;
 	
@@ -45,7 +45,7 @@ public class CommonTransfer {
 	
 	public MxlDefaults defaults = new MxlDefaults(null, null, null, null);
 	public Map<String, MxlScorePart> scoreParts = new HashMap<String, MxlScorePart>();
-	//´¢´æËùÓĞÒô½Ú,
+	//å‚¨å­˜æ‰€æœ‰éŸ³èŠ‚,
 	public Map<String, Vector<Note>> scorePartsNotes = new HashMap<String, Vector<Note>>(); 
 	
 	// -----
@@ -91,7 +91,7 @@ public class CommonTransfer {
 		if (this.pageHeight > 0 && this.screenHeight > 0) {
 			this.zoomY = screenHeight / pageHeight;
 		}
-		// µÈ±ÈÀı
+		// ç­‰æ¯”ä¾‹
 		zoomY = zoomX > zoomY ? zoomX : zoomY;
 		zoomX = zoomY;
 		canvas.scale(zoomX, zoomY);

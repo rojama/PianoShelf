@@ -10,10 +10,10 @@ public class Note {
 	public int pageNum;
 	public String partID;
 	public MxlNote mxlNote;
-	public int duration;  //64 Îª4·Ö1Òô·û
-	public PointF point; //Òô·û×ø±ê
-	public Pitch pitch; //Òôµ÷
-	public int volume = 1;   //ÒôÁ¿
+	public int duration;  //64 ä¸º4åˆ†1éŸ³ç¬¦
+	public PointF point; //éŸ³ç¬¦åæ ‡
+	public Pitch pitch; //éŸ³è°ƒ
+	public int volume = 1;   //éŸ³é‡
 	
 	public String toString(){
 		return " measureNum = "+measureNum + " ;pageNum = "+pageNum + " ;partID = "+partID 

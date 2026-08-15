@@ -85,6 +85,6 @@ public final class MxlPageLayout {
 		Float pageHeight = this.getPageHeight()!=null?this.getPageHeight():pt.getPageHeight();
 		Float pageWidth = this.getPageWidth()!=null?this.getPageWidth():pt.getPageWidth();
 		pt.ct.setPage(pageWidth, pageHeight);
-		pt.ct.pagemargins = this.getPageMargins(); //TODO ¸²¸Ç´¦Àí
+		pt.ct.pagemargins = this.getPageMargins(); //TODO è¦†ç›–å¤„ç†
 	}
 }
