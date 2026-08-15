@@ -75,6 +75,22 @@
             android:theme="@style/Theme.PianoShelf.Settings"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout" />
 
+        <!-- Mutopia 应用内分类目录浏览（作曲家/乐器/风格 3 维度 → 作品 → 下载） -->
+        <activity
+            android:name=".InAppBrowseActivity"
+            android:exported="false"
+            android:label="@string/browse_title"
+            android:theme="@style/Theme.PianoShelf.Settings"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout" />
+
+        <!-- 平台内置 WebView 浏览器：IMSLP / MuseScore / OpenScore 等，拦截 MusicXML 下载 -->
+        <activity
+            android:name=".PlatformWebViewActivity"
+            android:exported="false"
+            android:label="@string/webview_default_title"
+            android:theme="@style/Theme.PianoShelf.Settings"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout" />
+
         <!--
             FileProvider: exposes specific files (e.g. external storage .xml/.mxl)
             to GraphicsActivity as content:// URIs (avoids FileUriExposedException

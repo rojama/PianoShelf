@@ -141,18 +141,50 @@ public class OnlineScoreActivity extends AppCompatActivity {
             desc.setText(info.description);
             link.setText(info.websiteUrl);
 
-            card.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) { openInBrowser(info.websiteUrl); }
-            });
+            // 针对 Mutopia：CGI 表格结构规则，支持「应用内分类目录」直接浏览
+            // 其它 3 个平台：用内置 WebView 打开 + 拦截 MusicXML 下载链接
+            final boolean mutopia = "Mutopia Project".equalsIgnoreCase(info.name);
+            final View.OnClickListener clicker = new View.OnClickListener() {
+                @Override public void onClick(View v) {
+                    if (mutopia) {
+                        startActivity(new Intent(OnlineScoreActivity.this, InAppBrowseActivity.class));
+                    } else {
+                        openInAppWebView(info);
+                    }
+                }
+            };
+            card.setOnClickListener(clicker);
             open.setOnClickListener(new View.OnClickListener() {
-                @Override public void onClick(View v) { openInBrowser(info.websiteUrl); }
+                @Override public void onClick(View v) {
+                    if (mutopia) {
+                        open.setText(R.string.online_btn_visit); // 按钮文案统一；保留 Mutopia 走 InAppBrowse
+                        startActivity(new Intent(OnlineScoreActivity.this, InAppBrowseActivity.class));
+                    } else {
+                        openInAppWebView(info);
+                    }
+                }
             });
+            // Mutopia 按钮文案显示为「应用内浏览」以突出该特性
+            if (mutopia) open.setText(R.string.online_btn_inapp);
 
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT);
             lp.topMargin = (int) (8 * getResources().getDisplayMetrics().density);
             platformContainer.addView(card, lp);
+        }
+    }
+
+    /** 使用内置 WebView 打开平台（拦截 MusicXML 链接直接下载打开） */
+    private void openInAppWebView(OnlineScoreDownloader.PlatformInfo info) {
+        try {
+            Intent i = new Intent(this, PlatformWebViewActivity.class);
+            i.putExtra(PlatformWebViewActivity.EXTRA_INIT_URL, info.websiteUrl);
+            i.putExtra(PlatformWebViewActivity.EXTRA_PLATFORM_NAME, info.name);
+            startActivity(i);
+        } catch (Throwable t) {
+            // WebView 不可用时回退到系统浏览器
+            openInBrowser(info.websiteUrl);
         }
     }
 

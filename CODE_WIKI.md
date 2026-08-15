@@ -1211,3 +1211,120 @@ OnlineScoreActivity
 ```
 
 所有在线下载的乐谱都会被自动加入「最近打开」列表，并且缓存到 `{app_cache}/online_scores/` 目录，在存储空间足够的情况下可以零流量重开。
+
+---
+
+## 13. 新增功能（进阶）：应用内爬取分类目录 + 平台内 WebView 直接下载
+
+> 用户不再需要手动复制 URL 到外部浏览器。现在 **推荐平台卡片** 点击后，在应用内即可完成「浏览分类 → 选作品 → 一键下载打开」的完整闭环。
+>
+> 采用 **双轨架构**（针对不同平台特性选择最优实现）：
+>   - **轨道 A · 应用内目录浏览器（Mutopia Project）**：平台 CGI 结构规整、每首必有 MusicXML → 直接解析，用原生 ListView 展示，体验最流畅
+>   - **轨道 B · 内置 WebView + 链接拦截（MuseScore / IMSLP / OpenScore）**：平台是 SPA 或结构复杂 → 以 WebView 形式打开，JS/Cookie 完全兼容，当用户点击 MusicXML 文件链接时自动拦截并调用下载器
+
+### 13.1 双轨架构总览
+
+```
+                 【OnlineScoreActivity 推荐平台卡片】
+                                  │
+         ┌────────────────────────┴────────────────────────┐
+         │ Mutopia Project（按钮显示「应用内浏览」）        │ 其它 3 个平台（按钮显示「访问」）
+         ▼                                                 ▼
+   InAppBrowseActivity                             PlatformWebViewActivity
+         │                                                 │
+         │ Tab 1：作曲家 (A-Z 200+)                       │ WebView 加载真实网页
+         │ Tab 2：乐器 (Piano/Guitar/Violin/...)           │ - JS/Cookie/缩放全启用
+         │ Tab 3：风格 (Baroque/Classical/Romantic/...)    │ - 顶部加载进度条
+         ▼                                                 │
+   【点击分类行】                                           │ shouldOverrideUrlLoading
+         │ loadPieces(make-table.cgi?Composer=Xxx)         │   拦截 .xml/.mxl/.musicxml 直链
+         ▼                                                 │   → 交 OnlineScoreDownloader
+   【作品列表 ListView】                                    │
+   - 标题 / 作曲家 / 乐器 / 风格                           │ setDownloadListener(按钮下载)
+   - 行右侧「获取」按钮                                     │   - 命中 MusicXML → App 内下载
+         │ 点击作品 或 点击按钮                             │   - 其他类型 → DownloadManager
+         ▼                                                 │   - 完成后若为 MusicXML 自动打开
+ MutopiaCatalogParser.resolveMusicXmlUrl(piece-info.cgi)   │
+         │ 从详情页解析出 ftp/...-musicxml.xml.gz           │
+         ▼                                                 │
+ OnlineScoreDownloader.downloadAsync → 缓存 → 写入 RECENT  │
+         ▼                                                 │
+  GraphicsActivity（渲染 + 播放 + 翻页 + 收藏）◄───────────┘
+```
+
+### 13.2 新增 Java 源码（核心实现）
+
+| 文件 | 说明 | 行数 (约) |
+|------|------|-----------|
+| [MutopiaCatalogParser.java](file:///workspace/src/com/rojama/pianoshelf/MutopiaCatalogParser.java) | Mutopia 爬虫核心：**轻量正则解析**（不引入 jsoup 减体积），6 个静态方法 + 3 种分类解析 + make-table 作品列表解析 + piece-info MusicXML 直链解析，全部独立线程 | ~400 |
+| [InAppBrowseActivity.java](file:///workspace/src/com/rojama/pianoshelf/InAppBrowseActivity.java) | 目录浏览 UI：**3 维度 Material TabLayout**，2 层栈式导航（分类层 ⇄ 作品层，`onBackPressed` 返回键 & ActionBar 回退键双支持），独立 Category / Piece 两个 ListAdapter | ~360 |
+| [PlatformWebViewActivity.java](file:///workspace/src/com/rojama/pianoshelf/PlatformWebViewActivity.java) | 平台浏览器：`WebChromeClient` 进度回调 + `WebViewClient` URL 拦截 + `setDownloadListener` MimeType 分流；第三方 Cookies 与 `MIXED_CONTENT_COMPATIBILITY_MODE` 解决 MuseScore 登录 & 混合内容下载；非 MusicXML 走 `DownloadManager` + 广播监听完成 → 自动识别打开 | ~340 |
+
+### 13.3 新增资源（布局 + 图像 + 多语言）
+
+**布局（3×列表行 + 主页面 + WebView 页面）**：
+- `res/layout/inapp_browse.xml` — 目录浏览器主页（TabLayout + ListView + 空态/加载态）
+- `res/layout/item_category.xml` — 分类行（4dp 彩色指示条 + 名/副标题/数量角标）
+- `res/layout/item_piece.xml` — 作品行（标题 + 作曲家·乐器标签 + 风格小字 + 右侧「获取」Button）
+- `res/layout/platform_webview.xml` — WebView 容器（顶部水平 ProgressBar + 中心圆形进度）
+- `res/drawable/catalog_indicator.xml` — 分类侧边指示条（圆角矩形 Material Indigo 500）
+
+**多语言 strings（25 个键，中英文完全同步）**：
+
+| 分类 | 键示例 |
+|------|--------|
+| 目录浏览器 | `browse_title` / `browse_tab_composer` / `browse_loading_pieces` / `browse_resolving` / `browse_dl_starting` |
+| WebView 浏览器 | `webview_default_title` / `webview_intercepted_dl` / `webview_sysdl_starting` / `webview_perm_denied` |
+| 平台卡片扩展 | `online_btn_inapp` = 「应用内浏览 / Browse in App」（Mutopia 按钮特殊文案） |
+
+**AndroidManifest**：`InAppBrowseActivity` + `PlatformWebViewActivity` 两个 Activity 已注册（`exported=false` + 横竖屏/屏幕尺寸 configChanges 防止销毁重建）。
+
+### 13.4 关键技术决策
+
+#### 13.4.1 为何选择 Mutopia 做「应用内目录」？
+- **结构稳定可预测**：全站由 `composers.html` → `instruments.html` → `browse.html` → `make-table.cgi` → `piece-info.cgi` 组成，20+ 年结构几乎没变；
+- **MusicXML 覆盖率 100%**：所有 LilyPond 源文件均会导出 `-musicxml.xml.gz`；
+- **无反爬 & 无版权墙**：所有作品均为公有领域，无登录、无 CAPTCHA、无 CF 盾，轻量正则即可解析；
+- **体积最小**：仅用 OkHttp（已加依赖）+ `java.util.regex`，零额外 APK 体积增量。
+
+#### 13.4.2 为何其余平台使用 WebView？
+- **MuseScore/IMSLP** 存在 SPA（React/Vue）+ 登录墙 + Cloudflare 保护，原生解析成本极高且易失效；
+- **WebView 是唯一语义一致的方案**：CSS/JS/Cookie/富交互完全保持平台体验；
+- **关键链路仍打通**：只要用户在 WebView 内点到 MusicXML 下载（或服务器触发下载），`shouldOverrideUrlLoading` + `DownloadListener` **双保险**都会把 URL 截获到 App 内，交给 `OnlineScoreDownloader` 并 `FileProvider` → `GraphicsActivity`，零断点。
+
+#### 13.4.3 性能与合规
+- **网络**：OkHttp 自带连接池，Mutopia 每次打开分类 ~60-200KB，低流量；
+- **爬取礼节**：所有 Mutopia 请求带 UA 头 `PianoShelf-Android/2.0 (compat; +https://www.mutopiaproject.org/)`，同时解析层**不并行不并发**，每次用户点击才发起一个请求（约等于一个普通用户在浏览器里点网页）；
+- **版权**：严格只下载「MusicXML 文件」，不为分类结果做图片抓取 / 全文缓存；Mutopia 所有文件均为 Public Domain / CC BY-SA，与 App 教育用途完全吻合。
+- **存储**：低版本写 Download 目录时需 `WRITE_EXTERNAL_STORAGE`，已在 `PlatformWebViewActivity` 实现运行时申请 + 结果回调；Android 10+ 用 `setDestinationInExternalPublicDir` 无需权限。
+
+### 13.5 用户现在的 5 条使用路径
+
+```
+【路径 1：Mutopia 应用内直达 👑 推荐】
+Tab 4「在线」 → OnlineScoreActivity
+  → Mutopia Project 卡片  → 「应用内浏览」按钮
+  → InAppBrowseActivity [Tab: 作曲家/乐器/风格]
+  → 选分类（如: Composer=BachJS, Instrument=Piano, Style=Baroque）
+  → 选作品行 / 点「获取」
+  → 自动解析 MusicXML URL → 下载 → GraphicsActivity 打开
+
+【路径 2：MuseScore / IMSLP / OpenScore 应用内 WebView】
+同上 OnlineScoreActivity 卡片
+  → PlatformWebViewActivity（像普通浏览器一样浏览网站）
+  → 用户点击页面内任何 .xml / .mxl / .musicxml 链接
+  → 自动拦截 → 下载 → 立即打开（不离开 App）
+
+【路径 3：平台 WebView 内点下载按钮（非链接）】
+  → setDownloadListener 触发，按 MimeType/URL 判断
+  → MusicXML → 交 OnlineScoreDownloader；其它 → DownloadManager；
+  → DownloadManager 完成时若检测为 MusicXML → 也会自动打开
+
+【路径 4：传统粘贴直链】（保留不删）
+OnlineScoreActivity → URL 输入框 / 粘贴 → 下载并打开
+
+【路径 5：菜单项进入】
+主界面 Menu「在线乐谱」→ 直达 OnlineScoreActivity（含 4 张平台卡片）
+```
+
+**所有 5 条路径最终都汇聚到：OnlineScoreDownloader 下载 → 写 DatabaseHelper.RECENT → GraphicsActivity 渲染/播放，并且之后可以直接在「最近打开」Tab 零流量重开（缓存命中）**，形成了高度一致的数据闭环。

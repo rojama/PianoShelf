@@ -49,6 +49,7 @@
     <string name="online_btn_download">Download &amp; Open</string>
     <string name="online_btn_paste">Paste</string>
     <string name="online_btn_visit">Visit</string>
+    <string name="online_btn_inapp">Browse in App</string>
     <string name="online_btn_enter">Enter Downloader</string>
 
     <string name="online_pasted_ok">Pasted from clipboard</string>
@@ -67,6 +68,31 @@
     <string name="online_status_done">Saved as %1$s, opening…</string>
     <string name="online_status_fail">Download failed</string>
     <string name="online_open_ok">Download complete!</string>
+
+    <!-- ================= In-App Catalog Browser (Mutopia) ================= -->
+    <string name="browse_title">Mutopia Library</string>
+    <string name="browse_subtitle_pieces">Works</string>
+    <string name="browse_tab_composer">Composer</string>
+    <string name="browse_tab_instrument">Instrument</string>
+    <string name="browse_tab_style">Style</string>
+    <string name="browse_loading_cats">Loading categories…</string>
+    <string name="browse_loading_pieces">Loading works of \"%1$s\"…</string>
+    <string name="browse_load_fail">Failed to load catalog</string>
+    <string name="browse_load_fail_toast">Network error or server unavailable. Please retry.</string>
+    <string name="browse_empty_cats">No categories found</string>
+    <string name="browse_empty_pieces">This category is empty</string>
+    <string name="browse_btn_dl">Get</string>
+    <string name="browse_resolving">Resolving MusicXML link for \"%1$s\"…</string>
+    <string name="browse_resolve_fail">Cannot find a MusicXML download for this work: </string>
+    <string name="browse_dl_starting">Downloading \"%1$s\"…</string>
+
+    <!-- ================= Platform WebView (MuseScore/IMSLP/OpenScore) ================= -->
+    <string name="webview_default_title">Online Platform</string>
+    <string name="webview_intercepted_dl">Intercepted MusicXML link, starting download…</string>
+    <string name="webview_sysdl_desc">Downloaded by PianoShelf</string>
+    <string name="webview_sysdl_starting">Saving \"%1$s\" to Downloads…</string>
+    <string name="webview_sysdl_fail">Could not start download</string>
+    <string name="webview_perm_denied">Storage permission denied, cannot save to Downloads</string>
 
     <string-array name="list_colour">
         <item>Red</item>
