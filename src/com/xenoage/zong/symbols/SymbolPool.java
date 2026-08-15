@@ -71,7 +71,7 @@ public class SymbolPool {
 			xmlIndex = R.xml.tex_default;
 			pngIndex = R.drawable.tex_default;
 		}
-		// TODO Ôö¼ÓÑùÊ½
+		// TODO å¢åŠ æ ·å¼
 
 		try {
 			Bitmap warningBitmap = Bitmap.createBitmap(10, 40, Config.ARGB_8888);
@@ -93,7 +93,7 @@ public class SymbolPool {
 			int eventType = xpp.getEventType();
 			
 			/**
-			//Éú³É×ÜÍ¼ÓÃ
+			//ç”Ÿæˆæ€»å›¾ç”¨
 			int x=50,y=50,maxh =0;
 			Bitmap bm = Bitmap.createBitmap(800 , 2500 , Config.ARGB_8888);  
 	        Canvas canvas_symbol = new  Canvas(bm);  
@@ -129,7 +129,7 @@ public class SymbolPool {
 						
 						
 						/**
-						//Éú³É×ÜÍ¼ÓÃ
+						//ç”Ÿæˆæ€»å›¾ç”¨
 						Paint paint = new Paint();
 						paint.setColor(Color.BLACK);						
 						if (x+bitmapSymbol.getWidth()+110 > 750) {
@@ -153,7 +153,7 @@ public class SymbolPool {
 			}// eof-while
 			
 			/**
-			//Éú³É×ÜÍ¼ÓÃ
+			//ç”Ÿæˆæ€»å›¾ç”¨
 			canvas_symbol.save(Canvas.ALL_SAVE_FLAG );  
 	        canvas_symbol.restore();  
 	          

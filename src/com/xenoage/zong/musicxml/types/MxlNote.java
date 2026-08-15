@@ -45,7 +45,7 @@ public final class MxlNote implements MxlMusicDataContent {
 	private MxlType type;
 
 	@NeverNull
-	private final int dot; // ¸½µãÊıÄ¿
+	private final int dot; // é™„ç‚¹æ•°ç›®
 	
 	@NeverNull
 	private final Integer duration; 
@@ -256,7 +256,7 @@ public final class MxlNote implements MxlMusicDataContent {
 
 		pt.measureUp = pt.getMeasureUp(getStaff());
 
-		//¶¨ÒåÒô·ûÓÃÓÚÑİ×à
+		//å®šä¹‰éŸ³ç¬¦ç”¨äºæ¼”å¥
 		Note note = new Note();
 		note.mxlNote = this;
 		note.measureNum=pt.nowMeasure;		
@@ -305,7 +305,7 @@ public final class MxlNote implements MxlMusicDataContent {
 			}
 		}
 
-		// ÊÇ·ñºÍÉÏÃæµÄÒô·ûÔÚÍ¬Ò»¸öX×ø±ê
+		// æ˜¯å¦å’Œä¸Šé¢çš„éŸ³ç¬¦åœ¨åŒä¸€ä¸ªXåæ ‡
 		boolean isSameX = false;
 		
 		if (this.getContent().getNoteContentType() == MxlNoteContentType.Normal) {
@@ -313,7 +313,7 @@ public final class MxlNote implements MxlMusicDataContent {
 			isSameX = mnn.getFullNote().isChord();
 			note.duration = pt.nowDuration * 64 / pt.divisions;
 			
-			//¼ÓÈëÒô·û
+			//åŠ å…¥éŸ³ç¬¦
 			if (mnn.getFullNote().getContent().getFullNoteContentType() == MxlFullNoteContentType.Pitch){
 				note.pitch = ((MxlPitch) mnn.getFullNote().getContent()).getPitch();				
 			}
@@ -339,13 +339,13 @@ public final class MxlNote implements MxlMusicDataContent {
 		
 		float oldLastNoteX = pt.lastNoteX;
 		
-		// È¡Òô·û×ø±ê
+		// å–éŸ³ç¬¦åæ ‡
 		if (this.getPrintStyle() != null) {
 			pt.setPointInMeasure(this.getPrintStyle().getPosition());
 //			if (pt.oldX <= pt.lastNoteX + pt.ct.NOTE_WIDTH && pt.oldX >= pt.lastNoteX - pt.ct.NOTE_WIDTH) {
 //				isSameX = true;
 //			}
-			// ¼ÇÂ¼ÉÏÒ»¸öÒô·ûµÄX×ø±ê
+			// è®°å½•ä¸Šä¸€ä¸ªéŸ³ç¬¦çš„Xåæ ‡
 			if (!isSameX) {
 				pt.lastNoteX = pt.oldX;
 			}
@@ -353,7 +353,7 @@ public final class MxlNote implements MxlMusicDataContent {
 		
 		// System.out.println(isSameX + "|" + pt.oldX + "|" + pt.lastNoteX);
 
-		// »­Òô·û
+		// ç”»éŸ³ç¬¦
 		if (this.getType() != null) {
 			MxlStemValue stemValue = MxlStemValue.None;
 			MxlPosition stemPosition = MxlPosition.empty;
@@ -364,7 +364,7 @@ public final class MxlNote implements MxlMusicDataContent {
 
 			Symbol symbol = null;
 			switch (this.getContent().getFullNote().getContent().getFullNoteContentType()) {
-			// Òô·û
+			// éŸ³ç¬¦
 			case Pitch:
 				switch (this.getType().type) {
 				case _256TH:
@@ -393,7 +393,7 @@ public final class MxlNote implements MxlMusicDataContent {
 				
 				
 
-				// ¼ÓÏß
+				// åŠ çº¿
 				if (line < 0) {
 					for (int i = -2; i >= line; i = i - 2) {
 						float y = pt.measureUp + (-i / 2 + 4) * 10;
@@ -408,7 +408,7 @@ public final class MxlNote implements MxlMusicDataContent {
 					}
 				}
 
-				// »­¸¨Öú·ûºÅ
+				// ç”»è¾…åŠ©ç¬¦å·
 				for (MxlNotations notaion : this.getNotations()) {
 					for (MxlNotationsContent content : notaion.getElements()) {
 						switch (content.getNotationsContentType()) {
@@ -457,7 +457,7 @@ public final class MxlNote implements MxlMusicDataContent {
 					}
 				}
 
-				// »­·û¸É
+				// ç”»ç¬¦å¹²
 				if (this.getType().type.ordinal() < MxlTypeValue.WHOLE.ordinal()) {
 					float beginX = pt.measureLeft + pt.oldX, startY = pt.measureUp + pt.oldY, stopY = startY;
 
@@ -487,7 +487,7 @@ public final class MxlNote implements MxlMusicDataContent {
 					pt.drawLine(beginX, startY, beginX, stopY);
 
 					if (this.getBeams().size() > 0) {
-						// »­·ûÁº
+						// ç”»ç¬¦æ¢
 						float beamX = beginX, beamY = stopY;
 						for (MxlBeam beam : this.getBeams()) {
 							switch (stemValue) {
@@ -507,7 +507,7 @@ public final class MxlNote implements MxlMusicDataContent {
 									case Continue:
 									case End:
 										PointF point = pt.lastBeamPoint.get(lastBeam);
-										// »­´Öµã
+										// ç”»ç²—ç‚¹
 										for (int i = -1; i <= 1; i++) {
 											pt.drawLine(point.x, point.y + i, beamX, beamY + i);
 										}
@@ -523,7 +523,7 @@ public final class MxlNote implements MxlMusicDataContent {
 							}
 						}
 					} else if (pt.lastBeamPoint.isEmpty() && !isSameX) {
-						// »­·ûÆì
+						// ç”»ç¬¦æ——
 						symbol = pt.ct.symbolPool.getSymbol(CommonSymbol.NoteFlag);
 						for (int i = 0; i < MxlTypeValue.QUARTER.ordinal()
 								- this.getType().type.ordinal(); i++) {
@@ -535,7 +535,7 @@ public final class MxlNote implements MxlMusicDataContent {
 								break;
 							case Down:
 								Matrix mx = new Matrix();
-								mx.setScale(1, -1); // ²úÉú¾µÏñ
+								mx.setScale(1, -1); // äº§ç”Ÿé•œåƒ
 								Bitmap newBitmap = Bitmap.createBitmap(symbol.getBitmap(), 0, 0,
 										symbol.getBitmap().getWidth(), symbol.getBitmap()
 												.getHeight(), mx, true);
@@ -550,7 +550,7 @@ public final class MxlNote implements MxlMusicDataContent {
 				pt.oldX += symbol.getBitmap().getWidth() + pt.ct.SPACE;
 				break;
 
-			// ĞİÖ¹·û
+			// ä¼‘æ­¢ç¬¦
 			case Rest:
 				pt.oldY = 2 * 10;
 				switch (this.getType().type) {
@@ -602,9 +602,9 @@ public final class MxlNote implements MxlMusicDataContent {
 			}
 		}
 
-		// »­¸½µã·û
+		// ç”»é™„ç‚¹ç¬¦
 		for (int i = 0; i < this.getDot(); i++) {
-			if (pt.oldY % 10 == 0) { // ·ÀÖ¹¸½µã·û±»ÎåÏßÆ×¸²¸Ç
+			if (pt.oldY % 10 == 0) { // é˜²æ­¢é™„ç‚¹ç¬¦è¢«äº”çº¿è°±è¦†ç›–
 				pt.oldY -= 10 / 2;
 			}
 			Symbol dotSymbol = pt.ct.symbolPool.getSymbol(CommonSymbol.NoteDot);
@@ -613,7 +613,7 @@ public final class MxlNote implements MxlMusicDataContent {
 			pt.oldX += dotSymbol.getBitmap().getWidth() + pt.ct.SPACE;
 		}
 
-		// »­¸è´Ê
+		// ç”»æ­Œè¯
 		float lyricY = pt.measureUp + 80;
 		for (MxlLyric lyric : this.getLyrics()) {
 			pt.setPointInMeasure(lyric.getPosition());

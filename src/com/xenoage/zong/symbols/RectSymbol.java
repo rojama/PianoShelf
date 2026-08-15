@@ -6,7 +6,7 @@ import android.graphics.RectF;
 public class RectSymbol implements Symbol {
 	private String id;
 	private RectF rectangle;
-	private int topToBase;  //顶部到基线的距离
+	private int topToBase;  //椤堕儴鍒板熀绾跨殑璺濈
 	public int getTopToBase() {
 		return topToBase;
 	}

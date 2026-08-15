@@ -47,7 +47,7 @@ public class PaintTransfer {
 	
 	public float oldX = 0;
 	public float oldY = 0;
-	public float lastNoteX = -1; // ÉÏÒ»¸öÒô·ûµÄX×ø±êÓÃÓÚÅĞ¶ÏÊÇ·ñÔÚÍ¬Ò»¸öµãÉÏ
+	public float lastNoteX = -1; // ä¸Šä¸€ä¸ªéŸ³ç¬¦çš„Xåæ ‡ç”¨äºåˆ¤æ–­æ˜¯å¦åœ¨åŒä¸€ä¸ªç‚¹ä¸Š
 	public Map<MxlBeam, PointF> lastBeamPoint = new HashMap<MxlBeam, PointF>();
 	public Map<MxlCurvedLine, PointF> lastCurvedLinePoint = new HashMap<MxlCurvedLine, PointF>();;
 	public String nowPartID;
@@ -55,8 +55,8 @@ public class PaintTransfer {
 	public int nowLine = 1;
 	public int nowMeasure = 0;
 
-	public float measureLeft = 0; // µ±Ç°Ğ¡½Ú×ó±ßX×ø±ê
-	public float measureUp = 0; // µ±Ç°Ğ¡½ÚÉÏ±ßY×ø±ê
+	public float measureLeft = 0; // å½“å‰å°èŠ‚å·¦è¾¹Xåæ ‡
+	public float measureUp = 0; // å½“å‰å°èŠ‚ä¸Šè¾¹Yåæ ‡
 	public float measureWidth = 0;
 	public Map<Integer, Float> measureUpAll = new HashMap<Integer, Float>();
 	public Map<Integer, ClefType> nowClefType = new HashMap<Integer, ClefType>();
@@ -66,11 +66,11 @@ public class PaintTransfer {
 	public int divisions;
 	public boolean isNewSystem;
 
-	// ÓÃÓÚ¿ØÖÆ¶àPartµÄÌø×ª
+	// ç”¨äºæ§åˆ¶å¤šPartçš„è·³è½¬
 	public boolean block = false;
 	public boolean firstIn = true;
 	// public Map<String, Integer> oldMeasure = new HashMap<String, Integer>();
-	// //ÒÑ¾­´¦Àí¹ıµÄĞ¡½Ú
+	// //å·²ç»å¤„ç†è¿‡çš„å°èŠ‚
 	// public Map<String, Integer> oldLine = new HashMap<String, Integer>();
 	// public Map<String, Integer> oldPage = new HashMap<String, Integer>();
 	public Map<String, PaintTransfer> oldPaintTransfer = new HashMap<String, PaintTransfer>();
@@ -109,12 +109,12 @@ public class PaintTransfer {
 		staffLayout.clear();
 		block = false;
 		firstIn = true;
-		// oldMeasure.clear(); //ÒÑ¾­´¦Àí¹ıµÄĞ¡½Ú
+		// oldMeasure.clear(); //å·²ç»å¤„ç†è¿‡çš„å°èŠ‚
 		// oldLine.clear();
 		// oldPage.clear();
 	}
 
-	// È¡µ±Ç°Ò³µÄMargins
+	// å–å½“å‰é¡µçš„Margins
 	public MxlAllMargins getMxlAllMargins() {
 		for (MxlPageMargins mpm : ct.pagemargins) {
 			if (mpm.getType() == MxlMarginType.Both) {
@@ -164,7 +164,7 @@ public class PaintTransfer {
 		return;
 	}
 
-	// »æÍ¼¹«ÓÃ
+	// ç»˜å›¾å…¬ç”¨
 	public void drawBitmap(Bitmap bitmap, float left, float top) {
 		Canvas can = new Canvas(bitmap);
 		can.drawColor(this.getPaint().getColor(), Mode.MULTIPLY);
@@ -264,7 +264,7 @@ public class PaintTransfer {
 		}
 	}
 
-	// »­Æ×ºÅ
+	// ç”»è°±å·
 	public float printClef(int key, float x, float y) {
 		ClefType clef = this.nowClefType.get(key);
 		if (this.nowClefType != null) {
@@ -284,7 +284,7 @@ public class PaintTransfer {
 		return 0;
 	}
 
-	// »­µ÷ºÅ
+	// ç”»è°ƒå·
 	public float printKey(float x, float y) {
 		Accidental.Type id = null;
 		switch (this.nowFifths) {
@@ -316,7 +316,7 @@ public class PaintTransfer {
 		return 0;
 	}
 
-	// »­½ÚÅÄ
+	// ç”»èŠ‚æ‹
 	public float printTime(float x, float y) {
 		float width = 0;
 		if (this.nowTime != null) {
@@ -373,7 +373,7 @@ public class PaintTransfer {
 		return this.oldY;
 	}
 
-	// Ô­µãÔÚ×óÏÂ½Ç×ª³É×óÉÏ½Ç
+	// åŸç‚¹åœ¨å·¦ä¸‹è§’è½¬æˆå·¦ä¸Šè§’
 	public float getCanvasY() {
 		return ct.pageHeight - this.oldY;
 	}

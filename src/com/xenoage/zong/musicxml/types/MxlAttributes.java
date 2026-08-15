@@ -149,7 +149,7 @@ public final class MxlAttributes implements MxlMusicDataContent {
 
 	@Override
 	public void print(PaintTransfer pt) {				
-		//Æ×ºÅ
+		//è°±å·
 		for (MxlClef clef : this.getClef()) {
 			if (clef.getSign() == MxlClefSign.G) {
 				pt.nowClefType.put(clef.getNumber(), ClefType.G);				
@@ -158,17 +158,17 @@ public final class MxlAttributes implements MxlMusicDataContent {
 			}
 		}
 		
-		//Òôµ÷·ûºÅ
+		//éŸ³è°ƒç¬¦å·
 		if (this.getKey() != null){
 			pt.nowFifths = this.getKey().getFifths();
 		}
 		
-		//½ÚÅÄ
+		//èŠ‚æ‹
 		if (this.getTime() != null){
 			pt.nowTime = this.getTime();
 		}		
 
-		//È¡µÃÒô³¤·Ö²¿
+		//å–å¾—éŸ³é•¿åˆ†éƒ¨
 		if (this.getDivisions() != null){
 			pt.divisions = this.getDivisions();
 		}
@@ -176,7 +176,7 @@ public final class MxlAttributes implements MxlMusicDataContent {
 		if (pt.nowPage != pt.ct.getDisPageNo())
 			return;			
 		
-		//ÊÇ·ñÖ»´òÓ¡½ÚÅÄ
+		//æ˜¯å¦åªæ‰“å°èŠ‚æ‹
 		boolean printTimeOnly = false;
 		if (this.getTime() != null && this.getClef().isEmpty() && !pt.isNewSystem){
 			printTimeOnly = true;
@@ -185,7 +185,7 @@ public final class MxlAttributes implements MxlMusicDataContent {
 		pt.printHand(printTimeOnly);
 		
 		
-//		//½ÚÅÄ
+//		//èŠ‚æ‹
 //		if (this.getTime() != null){
 //			pt.nowTime = this.getTime();
 //			if (pt.oldX == 0)

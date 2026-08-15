@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.rojama.pianoshelf"
+    android:versionCode="3"
+    android:versionName="2.1.0-online-catalog" >
+    <!--
+        Modernized Manifest:
+        - Elevated minSdk to 21 (Android 5.0 Lollipop) to match Gradle config
+        - Added READ_EXTERNAL_STORAGE explicitly (WRITE implies READ pre-19, but
+          newer Android releases split them)
+        - Android 12+ requires "android:exported" on activities/services that declare
+          intent filters → set exported="true" on the two launchable activities
+        - Declares androidx.core.content.FileProvider to avoid
+          android.os.FileUriExposedException on Android 7+
+    -->
+    <uses-sdk
+        android:minSdkVersion="21"
+        android:targetSdkVersion="34" />
+
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <permission
+        android:name="com.rojama.pianoshelf.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="com.rojama.pianoshelf.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+
+    <application
+        android:allowBackup="true"
+        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+        android:debuggable="true"
+        android:extractNativeLibs="true"
+        android:icon="@drawable/icon"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PianoShelf" >
+        <activity
+            android:name="com.rojama.pianoshelf.PianoShelfActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout"
+            android:exported="true"
+            android:label="@string/app_name" >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="com.rojama.pianoshelf.GraphicsActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.PianoShelf.Fullscreen" >
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="application/vnd.recordare.musicxml" />
+                <data android:mimeType="application/vnd.recordare.musicxml+xml" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/xml" />
+                <!-- Also accept when opened by path suffix via a file explorer -->
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:pathPattern=".*\.xml" />
+                <data android:pathPattern=".*\.mxl" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name="com.rojama.pianoshelf.AppPreferenceActivity"
+            android:exported="false"
+            android:label="@string/per_display"
+            android:theme="@style/Theme.PianoShelf.Settings" />
+
+        <!-- 在线乐谱下载页面：URL 输入 + 推荐平台 + 下载进度 -->
+        <activity
+            android:name="com.rojama.pianoshelf.OnlineScoreActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout"
+            android:exported="false"
+            android:label="@string/tab_online"
+            android:theme="@style/Theme.PianoShelf.Settings" />
+
+        <!-- Mutopia 应用内分类目录浏览（作曲家/乐器/风格 3 维度 → 作品 → 下载） -->
+        <activity
+            android:name="com.rojama.pianoshelf.InAppBrowseActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout"
+            android:exported="false"
+            android:label="@string/browse_title"
+            android:theme="@style/Theme.PianoShelf.Settings" />
+
+        <!-- 平台内置 WebView 浏览器：IMSLP / MuseScore / OpenScore 等，拦截 MusicXML 下载 -->
+        <activity
+            android:name="com.rojama.pianoshelf.PlatformWebViewActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout"
+            android:exported="false"
+            android:label="@string/webview_default_title"
+            android:theme="@style/Theme.PianoShelf.Settings" />
+
+        <!--
+            FileProvider: exposes specific files (e.g. external storage .xml/.mxl)
+            to GraphicsActivity as content:// URIs (avoids FileUriExposedException
+            on Android 7.0 Nougat and above).
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.rojama.pianoshelf.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true" >
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="com.rojama.pianoshelf.androidx-startup"
+            android:exported="false" >
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                android:value="androidx.startup" />
+            <meta-data
+                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+                android:value="androidx.startup" />
+            <meta-data
+                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+                android:value="androidx.startup" />
+        </provider>
+
+        <uses-library
+            android:name="androidx.window.extensions"
+            android:required="false" />
+        <uses-library
+            android:name="androidx.window.sidecar"
+            android:required="false" />
+
+        <receiver
+            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+            android:directBootAware="false"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.DUMP" >
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

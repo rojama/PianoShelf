@@ -1,4 +1,18 @@
-// Root-level plugin declaration only (no module config here)
-plugins {
-    id 'com.android.application' version '8.1.4' apply false
+// Android Gradle Plugin 解析：使用 buildscript classpath 方式，
+// 比 plugins { id ... version } DSL 更直接，避免 Gradle Plugin Portal 元数据解析失败。
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // AGP 8.7.x 要求 Gradle 8.10+，我们使用 8.14.5，完全对齐。
+        classpath 'com.android.tools.build:gradle:8.7.2'
+    }
 }
+
+// AGP 在 buildscript classpath 加载后，通过 apply 启用
+apply plugin: 'com.android.application'
+
+// 模块级 android { } + dependencies { }
+apply from: 'pianoshelf.gradle'

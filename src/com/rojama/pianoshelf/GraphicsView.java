@@ -97,14 +97,22 @@ public class GraphicsView {
 	public void showView() {
 		progressBar.setVisibility(View.VISIBLE);
 		executeAsync(new Runnable() {
-			@Override public void run() { doLoad(true); }
+			// doLoad 声明 throws checked Exception；Runnable.run() 不能抛 checked，
+			// 这里包装为 RuntimeException。外层 executeAsync 会 catch(Throwable) 统一兜底。
+			@Override public void run() {
+				try { doLoad(true); }
+				catch (Exception e) { throw new RuntimeException(e); }
+			}
 		});
 	}
 
 	public void reShowView() {
 		progressBar.setVisibility(View.VISIBLE);
 		executeAsync(new Runnable() {
-			@Override public void run() { doLoad(false); }
+			@Override public void run() {
+				try { doLoad(false); }
+				catch (Exception e) { throw new RuntimeException(e); }
+			}
 		});
 	}
 

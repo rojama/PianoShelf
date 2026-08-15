@@ -69,7 +69,7 @@ public final class MxlPrint implements MxlMusicDataContent {
 
 	@Override
 	public void print(PaintTransfer pt) {
-		// Èç¹ûÓĞ»»ĞĞÅĞ¶ÏÊÇ·ñÒª´¦Àí
+		// å¦‚æœæœ‰æ¢è¡Œåˆ¤æ–­æ˜¯å¦è¦å¤„ç†
 		if (this.getPrintAttributes() != null) {
 			if (this.getPrintAttributes().getNewPage() != null) {
 				if (this.getPrintAttributes().getNewPage()) {
@@ -128,14 +128,14 @@ public final class MxlPrint implements MxlMusicDataContent {
 		if (pt.nowPage != pt.ct.getDisPageNo())
 			return;
 
-		// µÚÒ»²¿·ÖµÄµÚÒ»½Ú
+		// ç¬¬ä¸€éƒ¨åˆ†çš„ç¬¬ä¸€èŠ‚
 		if (pt.nowMeasure == 1) {
 			pt.measureUp = pt.ct.systemTopDistance + pt.getMxlAllMargins().getTopMargin();
 			pt.measureLeft = pt.ct.systemLeftMargin + pt.getMxlAllMargins().getLeftMargin();
 			pt.isNewSystem = true;
 		}
 
-		// ¼ÇÂ¼Ã¿Ò»ĞĞµÄ¶¥²¿ÓÃÓÚÏÂÒ»²¿·ÖµÄ²âÁ¿
+		// è®°å½•æ¯ä¸€è¡Œçš„é¡¶éƒ¨ç”¨äºä¸‹ä¸€éƒ¨åˆ†çš„æµ‹é‡
 		if (pt.isNewSystem || pt.measureUpAll.isEmpty()) {
 			if (pt.ct.oldPartID != null) {
 				Log.d("pt.nowLine", pt.nowLine+"");
@@ -152,13 +152,13 @@ public final class MxlPrint implements MxlMusicDataContent {
 
 		// if (!pt.firstIn && pt.isNewSystem) {
 		// pt.block = true;
-		// // pt.nowMeasure--; // ÅĞ¶ÏÊ±ÒÑ¾­¼Ó1£¬ËùÒÔÒª»Ö¸´
+		// // pt.nowMeasure--; // åˆ¤æ–­æ—¶å·²ç»åŠ 1ï¼Œæ‰€ä»¥è¦æ¢å¤
 		// // pt.nowLine--;
 		// } else {
 		// pt.block = false;
 		// }
 
-		// // µÚÒ»½Ú´òÓ¡Ãû³Æ
+		// // ç¬¬ä¸€èŠ‚æ‰“å°åç§°
 		// if (pt.nowMeasure == 1) {
 		// pt.getPaint().setTextAlign(Align.RIGHT);
 		// pt.getPaint().setTextSize(pt.PART_NAME_SIZE);
@@ -167,7 +167,7 @@ public final class MxlPrint implements MxlMusicDataContent {
 		// pt.measureUp + 2 * 10);
 		// }
 		// else{
-		// //Ö®ºóÃ¿ĞĞÏÈ´òÓ¡Æ×ºÅºÍµ÷ºÅ
+		// //ä¹‹åæ¯è¡Œå…ˆæ‰“å°è°±å·å’Œè°ƒå·
 		// if (isNewSystem) {
 		// pt.printHand(false);
 		// }
