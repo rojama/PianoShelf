@@ -168,39 +168,57 @@ jobs:
           set -euo pipefail
           SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-7)"
 
+          # 用数组按顺序记住 debug/release 两份产物对应的（src, name, sha）路径，
+          # 然后再一次性写入 $GITHUB_OUTPUT，避免 "同一 step 写完 output 又立刻读
+          # steps.meta.outputs.xxx" 的空值陷阱（runner 只会在 step 进程完全结束后
+          # 才解析 $GITHUB_OUTPUT 并写入 step outputs）。
+          declare -a SRC=() NAME=() SHA=() DIR=()
           locate_apk() {
-            # $1 = build type: debug|release
             local type="$1"
             local dir="build/outputs/apk/${type}"
-            local src=""
-            # AGP 单模块输出默认名 app-${type}.apk；我们不假定，直接按目录找
-            local candidate=$(find "$dir" -maxdepth 2 -type f -name "*.apk" | head -n1 || true)
+            # 找不到时列目录 + 全局失败
+            local candidate
+            candidate="$(find "$dir" -maxdepth 3 -type f -name "*.apk" 2>/dev/null | head -n1 || true)"
             if [ -z "$candidate" ]; then
               echo "::error::No .apk found under $dir. Listing:"
-              ls -R "$dir" || true
+              find "$dir" -type f 2>/dev/null || ls -laR "$dir" || true
               exit 1
             fi
-            src="$candidate"
             local final_name="PianoShelf-${type}-${SHORT_SHA}.apk"
-            mv "$src" "$dir/$final_name"
+            if [ "$(basename "$candidate")" != "$final_name" ]; then
+              mv -f "$candidate" "$dir/$final_name"
+            fi
             ( cd "$dir" && sha256sum "$final_name" > "$final_name.sha256" )
-            echo "${type}_dir=$dir"
-            echo "${type}_src=$dir/$final_name"
-            echo "${type}_name=$final_name"
-            echo "${type}_sha=$dir/$final_name.sha256"
+            DIR+=("$dir")
+            SRC+=("$dir/$final_name")
+            NAME+=("$final_name")
+            SHA+=("$dir/$final_name.sha256")
           }
 
+          locate_apk debug
+          locate_apk release
+
+          # 写入 step outputs（给后续 upload-artifact / job summary 读取）
           {
-            locate_apk debug
-            locate_apk release
+            echo "debug_dir=${DIR[0]}"
+            echo "debug_src=${SRC[0]}"
+            echo "debug_name=${NAME[0]}"
+            echo "debug_sha=${SHA[0]}"
+            echo "release_dir=${DIR[1]}"
+            echo "release_src=${SRC[1]}"
+            echo "release_name=${NAME[1]}"
+            echo "release_sha=${SHA[1]}"
           } >> "$GITHUB_OUTPUT"
 
+          # 在当前 step 内要展示的，**直接用 shell 变量**，不要读 ${{ steps.meta.outputs.* }}
           echo "--- Debug APK ---"
-          cat "${{ steps.meta.outputs.debug_sha }}"
-          ls -la "${{ steps.meta.outputs.debug_src }}"
+          echo "  file=${SRC[0]}"
+          cat "${SHA[0]}"
+          ls -la "${SRC[0]}"
           echo "--- Release APK ---"
-          cat "${{ steps.meta.outputs.release_sha }}"
-          ls -la "${{ steps.meta.outputs.release_src }}"
+          echo "  file=${SRC[1]}"
+          cat "${SHA[1]}"
+          ls -la "${SRC[1]}"
 
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
