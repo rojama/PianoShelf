@@ -18,6 +18,11 @@
     <string name="info_not_exiet">File no longer exists</string>
     <string name="info_open_err">Cannot open file (invalid format or corrupted)</string>
     <string name="info_page_no">Page %d</string>
+    <string name="browse_tab_header_hint">Showing MusicXML files found on this device. On Android 13+ use the file picker below to open a specific .xml/.mxl file.</string>
+    <string name="browse_btn_open_file">Open MusicXML file…</string>
+    <string name="browse_btn_open_dir">Choose folder…</string>
+    <string name="browse_scoped_storage_note">Because of Scoped Storage (Android 11+) the tree view only shows the files this app can see. Use the system picker for the full device.</string>
+    <string name="browse_no_matching_files">No .xml or .mxl MusicXML files were found on this device.</string>
 
     <string name="dis_back_root">Go to root directory</string>
     <string name="dis_back_up">Go up: %s</string>

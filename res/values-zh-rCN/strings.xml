@@ -11,6 +11,11 @@
 	<string name="info_not_exiet">文件不存在</string>
 	<string name="info_open_err">文件格式有误</string>
 	<string name="info_page_no">第%d页</string>
+	<string name="browse_tab_header_hint">显示设备上已能识别到的 MusicXML 文件。Android 13+ 建议点击下方按钮使用系统文件选择器来打开具体 .xml / .mxl 文件。</string>
+	<string name="browse_btn_open_file">打开乐谱文件…</string>
+	<string name="browse_btn_open_dir">选择目录…</string>
+	<string name="browse_scoped_storage_note">由于 Android 11+ 的 Scoped Storage 分区存储机制，目录树仅显示本应用可直接访问到的文件。要看全机文件请使用系统选择器。</string>
+	<string name="browse_no_matching_files">设备内未搜索到任何 .xml / .mxl 格式乐谱文件。</string>
 	<string name="dis_back_root">根目录</string>
 	<string name="dis_back_up">上级目录[%s]</string>
 	<string name="menu_online_score">在线乐谱</string>

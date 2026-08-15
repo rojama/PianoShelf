@@ -16,16 +16,39 @@
     -->
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
 
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!--
+        Storage permissions, modernized for Scoped Storage (Android 10+):
+        - READ_EXTERNAL_STORAGE: useful only on API 29-32 (Android 10-12L).
+          On API 33+ (Android 13+) the permission is null-granted (always denied
+          at request time even if declared), so the legacy file tree at "/" cannot
+          return children listFiles(). On API 33+ we MUST use one of:
+             a) ACTION_OPEN_DOCUMENT (system SAF file picker - supported in-app)
+             b) MediaStore query (indexes Music/Download/Documents automatically)
+             c) android:requestLegacyExternalStorage=true on Android 10 (API 29)
+                (kept for users that upgrade and still rely on absolute paths)
+        - WRITE_EXTERNAL_STORAGE: no-op on API >=19 when writing to public shared
+          storage dirs; we set maxSdkVersion=32 so Android 13+ doesn't even ask.
+        - INTERNET: always granted on install (non-dangerous).
+    -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!--
+      requestLegacyExternalStorage=true lets legacy TabBrowseList list "/"
+      normally on Android 10 (API 29). On Android 11+ (API 30+) it is
+      IGNORED by the platform (Scoped Storage is always enforced), and on
+      API 28- it has no effect, so this attribute is safe to keep true.
+    -->
     <application
         android:allowBackup="true"
         android:icon="@drawable/icon"
         android:label="@string/app_name"
         android:supportsRtl="true"
+        android:requestLegacyExternalStorage="true"
         android:theme="@style/Theme.PianoShelf">
 
         <activity

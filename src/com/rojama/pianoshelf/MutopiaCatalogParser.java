@@ -157,23 +157,23 @@ public class MutopiaCatalogParser {
         List<CategoryItem> out = new ArrayList<>();
         if (TextUtils.isEmpty(html)) return out;
 
-        // <a href="...">文本</a> [数字] 的模式（紧随其后的计数方括号）
+        // <a href="...">text</a> [N] 模式
+        // group(1)=开头引号("或')  group(2)=href值  group(3)=链接文本  group(4)=计数数字
         Pattern aP = Pattern.compile(
-                "<a\\s+[^>]*?href\\s*=\\s*[\"']([^\"']*\"'])[^>]*?>(.*?)</a>\\s*(?:\\[([0-9]+)\\])?",
+                "<a\\s+[^>]*?href\\s*=\\s*([\"'])(.*?)\\1[^>]*?>(.*?)</a>\\s*(?:\\[([0-9]+)\\])?",
                 Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
         Matcher m = aP.matcher(html);
         while (m.find()) {
-            String href = m.group(1);
-            String text = m.group(2);
-            String count = m.group(3) == null ? "" : m.group(3);
+            String href = m.group(2);
+            String text = m.group(3);
+            String count = m.group(4) == null ? "" : m.group(4);
             if (href == null || text == null) continue;
-            href = href.replace("\"", "").replace("'", "").trim();
+            href = href.trim();
             if (!href.toLowerCase().contains(keywordInHref.toLowerCase())) continue;
             text = stripHtml(text).trim();
             if (text.isEmpty()) continue;
             String name = text;
             String subtitle = "";
-            // 有些含 "Bach, JS (1685–1750)" 或 "J. S. Bach (1685–1750)"，把 () 部分当 subtitle
             int paren = text.indexOf('(');
             if (paren > 0) {
                 name = text.substring(0, paren).trim();
@@ -291,29 +291,31 @@ public class MutopiaCatalogParser {
             // 在所有 td 中寻找 piece-info.cgi?id=NNNN 链接（即详情页）
             String infoHref = "";
             for (String td : tds) {
+                // group(1)=开头引号  group(2)=href值(piece-info)  group(3)=闭合引号（用于反向引用\1）
                 Pattern p = Pattern.compile(
-                        "<a\\s+[^>]*?href\\s*=\\s*[\"']([^\"']*piece-info\\.cgi\\?id=[0-9]+[\"']?)",
+                        "<a\\s+[^>]*?href\\s*=\\s*([\"'])([^\"']*piece-info\\.cgi\\?id=[0-9]+)\\1",
                         Pattern.CASE_INSENSITIVE);
                 Matcher m = p.matcher(td);
                 if (m.find()) {
-                    infoHref = m.group(1);
+                    infoHref = m.group(2);
                     break;
                 }
             }
             if (infoHref.isEmpty()) continue;
-            infoHref = infoHref.replace("\"", "").replace("'", "").trim();
+            infoHref = infoHref.trim();
 
             String title = "";
             // title 取首列纯文本；如果首列里有 piece-info 锚点，取其锚文本优先
             {
                 String first = tds.get(0);
+                // group(1)=引号  group(2)=href  group(3)=文本
                 Pattern p = Pattern.compile(
-                        "<a[^>]*?href=[\"']([^\"']*piece-info[^\"']*[\"']?)[^>]*?>(.*?)</a>",
+                        "<a\\s+[^>]*?href\\s*=\\s*([\"'])([^\"']*piece-info[^\"']*)\\1[^>]*?>(.*?)</a>",
                         Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
                 Matcher m = p.matcher(first);
-                if (m.find()) title = stripHtml(m.group(2) == null ? "" : m.group(2));
+                if (m.find()) title = stripHtml(m.group(3) == null ? "" : m.group(3));
                 if (title.isEmpty()) {
-                    p = Pattern.compile("<a\\s+[^>]*>(.*?)</a>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+                    p = Pattern.compile("<a\\s+[^>]*?>(.*?)</a>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
                     m = p.matcher(first);
                     if (m.find()) title = stripHtml(m.group(1) == null ? "" : m.group(1));
                     if (title.isEmpty()) title = stripHtml(first);
@@ -360,9 +362,9 @@ public class MutopiaCatalogParser {
 
     static String findBestMusicXmlUrl(String html) {
         if (TextUtils.isEmpty(html)) return null;
-        // 找出所有 <a href="..."> 并保留链接
+        // group(1)=引号  group(2)=href值  group(3)=链接文本
         Pattern p = Pattern.compile(
-                "<a\\s+[^>]*?href\\s*=\\s*[\"']([^\"']+[\"']?)[^>]*?>(.*?)</a>",
+                "<a\\s+[^>]*?href\\s*=\\s*([\"'])([^\"']+)\\1[^>]*?>(.*?)</a>",
                 Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
         Matcher m = p.matcher(html);
 
@@ -370,24 +372,22 @@ public class MutopiaCatalogParser {
         String best2 = null;   // -musicxml.xml
         String best3 = null;   // *.xml.gz (非 .pdf.gz / .mid.gz)
         while (m.find()) {
-            String href = m.group(1);
-            String text = m.group(2);
+            String href = m.group(2);
+            String text = m.group(3);
             if (href == null) continue;
-            href = href.replace("\"", "").replace("'", "").trim();
+            href = href.trim();
             text = text == null ? "" : stripHtml(text);
             String h = href.toLowerCase();
             if (!h.endsWith(".xml") && !h.endsWith(".xml.gz")) continue;
 
-            String abs = abs(href);
-            // 以锚文本包含 "MusicXML" 者优先
-            if (h.endsWith("-musicxml.xml.gz") && best1 == null) best1 = abs;
-            if (h.contains("-musicxml.xml") && !h.endsWith(".gz") && best2 == null) best2 = abs;
+            String absUrl = abs(href);
+            if (h.endsWith("-musicxml.xml.gz") && best1 == null) best1 = absUrl;
+            if (h.contains("-musicxml.xml") && !h.endsWith(".gz") && best2 == null) best2 = absUrl;
             if (best3 == null && h.endsWith(".xml.gz")
                     && !h.endsWith(".pdf.gz") && !h.endsWith(".mid.gz")) {
-                best3 = abs;
+                best3 = absUrl;
             }
-            // 如果锚文本明确写了 MusicXML，立即给最高优先级，即使后缀略模糊
-            if (text.toLowerCase().contains("musicxml") && best1 == null) best1 = abs;
+            if (text.toLowerCase().contains("musicxml") && best1 == null) best1 = absUrl;
         }
         return best1 != null ? best1 : (best2 != null ? best2 : best3);
     }
