@@ -887,3 +887,192 @@ target=android-19
 | 乐谱显示不全/错位 | MusicXML 使用了未实现的元素 (如 `<score-timewise>`) | 转换为 `score-partwise` 格式后重试 |
 | 翻页后音符与播放不同步 | maxTime 初始值较小导致第一页播放提前结束翻页 | 可考虑修改为基于 Note.duration 预计算总时长 |
 | 中文显示为英文 | 设备语言非 zh-CN | 系统设置切换为简体中文，或在 strings.xml 添加其他语言翻译 |
+
+---
+
+## 11. 现代化改造 & Bug 修复记录 (v2.0.0-modernized)
+
+> 本章节记录了将项目从 **Ant + Android 4.4 (API 19)** 升级到 **Gradle + Android 14 (API 34)** 过程中所做的全部修复、优化和兼容性改进。
+
+### 11.1 构建系统升级 (Ant → Gradle)
+
+| 变更项 | 说明 |
+|-------|------|
+| **构建系统** | Apache Ant → Gradle (AGP 适配) |
+| **compileSdk** | 19 → **34** (Android 14) |
+| **targetSdk** | 19 → **34** (Android 14) |
+| **minSdk** | 8 → **21** (Android 5.0 Lollipop) |
+| **versionCode** | 1 → 2 |
+| **versionName** | 1.0 → **2.0.0-modernized** |
+| **新增文件** | `settings.gradle`, `build.gradle`, `pianoshelf.gradle`, `gradle.properties` |
+
+**Gradle 依赖升级** (从 Support Library → AndroidX + Material):
+```gradle
+implementation 'androidx.appcompat:appcompat:1.6.1'
+implementation 'com.google.android.material:material:1.11.0'
+implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+implementation 'androidx.preference:preference:1.2.1'
+implementation 'androidx.core:core:1.12.0'
+```
+
+---
+
+### 11.2 P0 级 Bug 修复 (崩溃 / 安全 / 性能)
+
+#### 11.2.1 SQL 注入漏洞 (DatabaseHelper)
+
+**问题**: 原代码使用字符串拼接构造 SQL，存在注入风险：
+```java
+// 不安全
+db.execSQL("delete from RECENT where filepath = '" + filepath + "';");
+```
+
+**修复**: 
+- 全部改为 `?` 参数化查询 + `ContentValues`
+- `delete()` / `insert()` 使用 Android SDK 安全方法
+- 批量裁剪使用 `execSQL(sql, bindArgs)` 绑定参数
+
+#### 11.2.2 Cursor 资源泄漏 (DatabaseHelper)
+
+**问题**: `selectRecentItem` / `selectFavoriteItem` 在异常情况下 `Cursor` 可能未关闭，导致内存泄漏。
+
+**修复**: 
+- 所有 Cursor 操作包装在 `try-catch-finally` 中
+- `finally` 块确保 `cursor.close()` 被调用
+- 新增 `closeQuietly(Cursor)` 工具方法
+
+#### 11.2.3 线程爆炸 / OOM (GraphicsView 播放模型)
+
+**问题**: 原实现每音符一个 `PlayNoteThread`，一首 500 音符乐谱会创建 500+ 线程，极易 OOM 和卡顿。
+
+**修复**: 
+- 移除 `TimeThread` / `PlayThread` / `PlayPartThread` / `PlayNoteThread` 全部内部线程类
+- 改用 **单线程池调度器**：`ScheduledExecutorService.newScheduledThreadPool(2)`
+- 构建播放计划表：`Map<Integer /*tick*/, List<Note>>`
+- 每 `PARTTIME_MS` (5ms) 触发一次 tick，批量播放该 tick 下所有音符
+- 新增 `shutdown()` 方法安全释放线程池
+
+#### 11.2.4 SoundPool 废弃构造 + 空指针
+
+**问题**: 
+- `SoundPool(int, int, int)` 在 API 21+ 已废弃
+- 未加载完成即 `playSound()` 会导致 NPE 或无声
+- 从未调用 `release()` 导致资源泄漏
+
+**修复**:
+- 使用 `SoundPool.Builder` (API 21+) + AudioAttributes
+- 低版本保留 Legacy 构造 (兼容 minSdk=21 但保留判断)
+- 新增加载状态回调：`OnLoadCompleteListener` + 计数等待
+- 新增 `release()` 静态方法，`Activity.onDestroy()` 时释放
+- `playSound()` 前校验资源已加载
+
+#### 11.2.5 getRawID() 性能优化 (O(80-switch) → O(1) 查表)
+
+**问题**: 原实现 ~80 条分支的嵌套 switch-case，每次调用需多次条件判断。
+
+**修复**: 
+- 构建二维查表数组：`int[12 /*add*/][8 /*octave*/]`
+- `Pitch` → 索引 → O(1) 直达
+- 静态 `volatile` 标志 + synchronized 确保只初始化一次
+
+---
+
+### 11.3 P1 级兼容性修复 (AndroidX + 新 SDK 适配)
+
+#### 11.3.1 Activity 继承体系升级
+
+| Activity | 原父类 | 新父类 | 说明 |
+|----------|--------|--------|------|
+| `PianoShelfActivity` | `Activity` | `AppCompatActivity` | 获得 ActionBar/Toolbar/Lifecycle 支持 |
+| `GraphicsActivity` | `Activity` | `AppCompatActivity` | 同上 |
+| `AppPreferenceActivity` | `PreferenceActivity` (deprecated) | `AppCompatActivity` + `PreferenceFragmentCompat` | 使用 AndroidX Preference |
+
+#### 11.3.2 FileUriExposedException (Android 7.0+)
+
+**问题**: Android 7.0+ 禁止 app 间暴露 `file://` URI，直接启动会崩溃。
+
+**修复**:
+- `AndroidManifest.xml` 声明 `FileProvider`:
+  ```xml
+  <provider
+      android:name="androidx.core.content.FileProvider"
+      android:authorities="com.rojama.pianoshelf.fileprovider"
+      android:exported="false"
+      android:grantUriPermissions="true">
+      <meta-data android:resource="@xml/file_paths" />
+  </provider>
+  ```
+- 新增 `res/xml/file_paths.xml` 配置可共享目录
+- 三个 Tab List 统一使用 `TabBrowseList.launchGraphicsActivity()`，通过 `FileProvider.getUriForFile()` 生成 `content://` URI
+- Intent 添加 `FLAG_GRANT_READ_URI_PERMISSION`
+
+#### 11.3.3 动态权限申请 (Android 6.0+)
+
+**问题**: Android 6.0+ 需要动态申请危险权限，原代码仅在 Manifest 声明，Browse/Recent/Favorite 列表为空。
+
+**修复**:
+- `PianoShelfActivity`: 启动时检查 `WRITE_EXTERNAL_STORAGE`，未授权则弹出请求
+- `GraphicsActivity`: 打开文件前检查 `READ_EXTERNAL_STORAGE`，通过 `pendingPath` 延迟初始化
+- 回调 `onRequestPermissionsResult` 中刷新列表或继续加载乐谱
+
+#### 11.3.4 Deprecated API 替换
+
+| 废弃 API | 位置 | 替换方案 |
+|---------|------|---------|
+| `AsyncTask` | GraphicsView | `new Thread()` + `Handler(Looper.getMainLooper())` 回主线程 |
+| `FloatMath.sqrt()` | TouchView | `Math.sqrt()` (API 17+ 已推荐) |
+| `Display.getWidth() / getHeight()` | GraphicsActivity / TouchView | `Resources.getDisplayMetrics().widthPixels/heightPixels` |
+| `AbsoluteLayout` | ViewScroll | `FrameLayout` + `setX()/setY()` 实现子 View 定位 |
+| `System.exit(0)` | PianoShelfActivity.onDestroy | 移除；改用 `finishAffinity()` 优雅退出 |
+| `PreferenceActivity.addPreferencesFromResource()` | AppPreferenceActivity | `PreferenceFragmentCompat.addPreferencesFromResource()` |
+
+#### 11.3.5 AndroidManifest 现代化
+
+- `targetSdkVersion` → 34
+- 新增 `READ_EXTERNAL_STORAGE` 显式权限
+- `WRITE_EXTERNAL_STORAGE` 添加 `android:maxSdkVersion="32"` (Android 13+ 不再需要)
+- `android:exported`: 含 `intent-filter` 的 Activity 标记为 `true`，其余为 `false` (Android 12+ 要求)
+- `android:supportsRtl="true"` (国际化支持)
+- `android:allowBackup="true"` (云备份)
+- `application` 主题改为 `@style/Theme.PianoShelf` (Material)
+- `GraphicsActivity` 单独使用 `Theme.PianoShelf.Fullscreen`
+- `AppPreferenceActivity` 使用 `Theme.PianoShelf.Settings`
+
+---
+
+### 11.4 P2 级清理 & 细节修复
+
+#### 11.4.1 资源文件修复
+
+- **styles.xml**: 新增三套 Material Design 主题：
+  - `Theme.PianoShelf` → `Theme.MaterialComponents.Light.DarkActionBar.Bridge` (主界面)
+  - `Theme.PianoShelf.Fullscreen` → `Theme.MaterialComponents.NoActionBar.Bridge` (乐谱查看全屏)
+  - `Theme.PianoShelf.Settings` → 带 ActionBar 的设置页主题
+- **main.xml**: `fill_parent` → `match_parent` (API 8+ 官方推荐替换)
+- **英文 strings.xml**: 补齐缺失的 `menu_stop` / `menu_pause` 键，确保英文环境不崩溃
+- **中文 strings.xml**: 补齐缺失的 `menu_stop` / `menu_pause` 键，与英文同步
+
+#### 11.4.2 代码清理
+
+- **GraphicsView**: 移除 `(Activity) context` 多余强制转换（参数类型已是 `GraphicsActivity`）
+- 清理所有 Java 文件中未使用的 import 语句
+- 各 Activity `onDestroy` 中补齐资源释放：
+  - `PianoShelfActivity`: `SoundPoolUtiil.release()` + `dbhelp.close()`
+  - `GraphicsActivity`: `graphicsView.shutdown()` + `SoundPoolUtiil.release()`
+
+---
+
+### 11.5 修复前后对比总结
+
+| 维度 | 修复前 | 修复后 |
+|------|--------|--------|
+| **编译 SDK** | Android 4.4 (API 19) | Android 14 (API 34) |
+| **最低支持** | Android 2.2 (API 8) | Android 5.0 (API 21)，覆盖 99%+ 活跃设备 |
+| **构建系统** | Apache Ant (废弃) | Gradle + AndroidX (主流) |
+| **SQL 安全** | 存在注入漏洞 | 参数化查询，无注入风险 |
+| **播放模型** | 每音符 1 线程 (OOM 风险) | 单调度器 + tick 批量调度 (稳定) |
+| **文件分享** | Android 7+ 直接崩溃 | FileProvider content:// URI (安全) |
+| **权限处理** | Android 6+ 列表空 | 动态授权 + 回调刷新 |
+| **UI 主题** | 老式 Android 2.x 风格 | Material Design (现代) |
+| **资源泄漏** | Cursor/Thread/SoundPool 未释放 | finally + onDestroy 统一释放 |
+| **代码规范** | Deprecated API 滥用 | 全部替换为当前推荐 API |

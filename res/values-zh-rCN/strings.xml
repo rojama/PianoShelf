@@ -17,6 +17,8 @@
 	<string name="menu_pageup">上一页</string>
 	<string name="menu_pagedown">下一页</string>
 	<string name="menu_play">播放</string>
+	<string name="menu_stop">停止</string>
+	<string name="menu_pause">暂停</string>
 	<string name="per_display">显示设置</string>
 	<string name="per_background">背景颜色</string>
 	<string name="per_foreground">前景颜色</string>

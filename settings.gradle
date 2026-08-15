@@ -1,0 +1,19 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+rootProject.name = "PianoShelf"
+// Single-module project: root project IS the Android application module
+include ':pianoshelf'
+project(':pianoshelf').buildFileName = 'pianoshelf.gradle'
+project(':pianoshelf').projectDir = new File(rootDir, '.')

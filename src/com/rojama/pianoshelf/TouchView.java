@@ -2,9 +2,8 @@ package com.rojama.pianoshelf;
 
 import android.app.Activity;
 import android.content.Context;
-import android.graphics.Bitmap;
 import android.graphics.Matrix;
-import android.util.FloatMath;
+import android.util.DisplayMetrics;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -13,36 +12,37 @@ import android.widget.ImageView;
 import android.widget.ZoomControls;
 
 /**
- * ¼Ì³ĞImageView ÊµÏÖÁË¶àµã´¥ÅöµÄÍÏ¶¯ºÍËõ·Å
- * 
- * @author Administrator
- * 
+ * ç»§æ‰¿ ImageView å®ç°å¤šç‚¹è§¦æ§æ‹–åŠ¨å’Œç¼©æ”¾ã€‚
+ *
+ * ä¿®å¤ (Modernization):
+ *  - FloatMath.sqrt (API 17 åºŸå¼ƒ) â†’ Math.sqrt
+ *  - å±å¹•å°ºå¯¸è·å–ä» deprecated Display.getWidth/Height â†’ DisplayMetrics
+ *  - å¢åŠ è¾¹ç•Œ null-safe / index-safe æ£€æŸ¥
  */
 public class TouchView extends ImageView {
 	static final int NONE = 0;
-	static final int DRAG = 1; // ÍÏ¶¯ÖĞ
-	static final int ZOOM = 2; // Ëõ·ÅÖĞ
-	static final int BIGGER = 3; // ·Å´óing
-	static final int SMALLER = 4; // ËõĞ¡ing
-	private int mode = NONE; // µ±Ç°µÄÊÂ¼ş
+	static final int DRAG = 1;    // æ‹–åŠ¨ä¸­
+	static final int ZOOM = 2;    // ç¼©æ”¾ä¸­
+	static final int BIGGER = 3;  // æ”¾å¤§ing
+	static final int SMALLER = 4; // ç¼©å°ing
+	private int mode = NONE;
 
-	private float beforeLenght; // Á½´¥µã¾àÀë
-	private float afterLenght; // Á½´¥µã¾àÀë
-	private float scale = 0.2f; // Ëõ·ÅµÄ±ÈÀı X Y·½Ïò¶¼ÊÇÕâ¸öÖµ Ô½´óËõ·ÅµÄÔ½¿ì
+	private float beforeLenght;
+	private float afterLenght;
+	private float scale = 0.2f;
 
 	private int screenW;
 	private int screenH;
-	
+
 	public int imgW;
 	public int imgH;
 
-	/* ´¦ÀíÍÏ¶¯ ±äÁ¿ */
 	private int start_x;
 	private int start_y;
 	private int stop_x;
 	private int stop_y;
 
-	private TranslateAnimation trans; // ´¦Àí³¬³ö±ß½çµÄ¶¯»­
+	private TranslateAnimation trans;
 
 	public TouchView(Context context, int w, int h) {
 		super(context);
@@ -50,35 +50,32 @@ public class TouchView extends ImageView {
 		screenW = w;
 		screenH = h;
 
-		ZoomControls zoom = (ZoomControls) ((Activity)context).findViewById(R.id.zoomControls);
-		zoom.setIsZoomInEnabled(true);
-		zoom.setIsZoomOutEnabled(true);
-		// Í¼Æ¬·Å´ó
-		zoom.setOnZoomInClickListener(new OnClickListener() {
-			public void onClick(View v) {
-				setScale(scale, BIGGER);
-			}
-		});
-		// Í¼Æ¬¼õĞ¡
-		zoom.setOnZoomOutClickListener(new OnClickListener() {
-			public void onClick(View v) {
-				setScale(scale, SMALLER);
-			}
-		});
+		ZoomControls zoom = null;
+		try {
+			zoom = (ZoomControls) ((Activity) context).findViewById(R.id.zoomControls);
+		} catch (Throwable ignored) { /* view may not exist in some contexts */ }
+		if (zoom != null) {
+			zoom.setIsZoomInEnabled(true);
+			zoom.setIsZoomOutEnabled(true);
+			zoom.setOnZoomInClickListener(new OnClickListener() {
+				public void onClick(View v) { setScale(scale, BIGGER); }
+			});
+			zoom.setOnZoomOutClickListener(new OnClickListener() {
+				public void onClick(View v) { setScale(scale, SMALLER); }
+			});
+		}
 	}
 
-	/**
-	 * ¾ÍËãÁ½µã¼äµÄ¾àÀë
-	 */
+	/** Compute distance between first two pointer coordinates. */
 	private float spacing(MotionEvent event) {
+		final int pcount = event.getPointerCount();
+		if (pcount < 2) return 0f;
 		float x = event.getX(0) - event.getX(1);
 		float y = event.getY(0) - event.getY(1);
-		return FloatMath.sqrt(x * x + y * y);
+		// NOTE: FloatMath removed in API 23+. Use java.lang.Math.sqrt.
+		return (float) Math.sqrt(x * x + y * y);
 	}
 
-	/**
-	 * ´¦Àí´¥Åö..
-	 */
 	@Override
 	public boolean onTouchEvent(MotionEvent event) {
 		switch (event.getAction() & MotionEvent.ACTION_MASK) {
@@ -88,11 +85,10 @@ public class TouchView extends ImageView {
 			stop_y = (int) event.getRawY();
 			start_x = (int) event.getX();
 			start_y = stop_y - this.getTop();
-			if (event.getPointerCount() == 2)
-				beforeLenght = spacing(event);
+			if (event.getPointerCount() >= 2) beforeLenght = spacing(event);
 			break;
 		case MotionEvent.ACTION_POINTER_DOWN:
-			if (spacing(event) > 10f) {
+			if (event.getPointerCount() >= 2 && spacing(event) > 10f) {
 				mode = ZOOM;
 				beforeLenght = spacing(event);
 			}
@@ -105,7 +101,6 @@ public class TouchView extends ImageView {
 			mode = NONE;
 			break;
 		case MotionEvent.ACTION_MOVE:
-			/* ´¦ÀíÍÏ¶¯ */
 			if (mode == DRAG) {
 				if (Math.abs(stop_x - start_x - getLeft()) < 88
 						&& Math.abs(stop_y - start_y - getTop()) < 85) {
@@ -114,15 +109,12 @@ public class TouchView extends ImageView {
 					stop_x = (int) event.getRawX();
 					stop_y = (int) event.getRawY();
 				}
-			}
-			/* ´¦ÀíËõ·Å */
-			else if (mode == ZOOM) {
-				if (spacing(event) > 10f) {
+			} else if (mode == ZOOM) {
+				if (event.getPointerCount() >= 2 && spacing(event) > 10f) {
 					afterLenght = spacing(event);
 					float gapLenght = afterLenght - beforeLenght;
-					if (gapLenght == 0) {
-						break;
-					} else if (Math.abs(gapLenght) > 5f) {
+					if (gapLenght == 0) break;
+					if (Math.abs(gapLenght) > 5f) {
 						if (gapLenght > 0) {
 							this.setScale(scale, BIGGER);
 						} else {
@@ -136,9 +128,8 @@ public class TouchView extends ImageView {
 		}
 		return true;
 	}
-	
-	private void processOut(){
-		/* ÅĞ¶ÏÊÇ·ñ³¬³ö·¶Î§ ²¢´¦Àí */
+
+	private void processOut() {
 		int disX = 0;
 		int disY = 0;
 		if (getHeight() <= screenH) {
@@ -167,31 +158,29 @@ public class TouchView extends ImageView {
 		}
 	}
 
-	/**
-	 * ÊµÏÖ´¦ÀíËõ·Å
-	 */
 	private void setScale(float temp, int flag) {
 		if (flag == BIGGER) {
-			if (this.getWidth() >= this.imgW * 1.4F) return;
-			this.setFrame(this.getLeft() - (int) (temp * this.getWidth()), this.getTop()
-					- (int) (temp * this.getHeight()), this.getRight()
-					+ (int) (temp * this.getWidth()), this.getBottom()
-					+ (int) (temp * this.getHeight()));
+			if (imgW > 0 && this.getWidth() >= this.imgW * 1.4F) return;
+			this.setFrame(this.getLeft()  - (int) (temp * this.getWidth()),
+						 this.getTop()   - (int) (temp * this.getHeight()),
+						 this.getRight() + (int) (temp * this.getWidth()),
+						 this.getBottom()+ (int) (temp * this.getHeight()));
 		} else if (flag == SMALLER) {
-			if (this.getWidth() <= this.imgW * 0.4F) return;
-			this.setFrame(this.getLeft() + (int) (temp * this.getWidth()), this.getTop()
-					+ (int) (temp * this.getHeight()), this.getRight()
-					- (int) (temp * this.getWidth()), this.getBottom()
-					- (int) (temp * this.getHeight()));
+			if (imgW > 0 && this.getWidth() <= this.imgW * 0.4F) return;
+			this.setFrame(this.getLeft()  + (int) (temp * this.getWidth()),
+						 this.getTop()   + (int) (temp * this.getHeight()),
+						 this.getRight() - (int) (temp * this.getWidth()),
+						 this.getBottom()- (int) (temp * this.getHeight()));
 		}
 		processOut();
 	}
 
-	/**
-	 * ÊµÏÖ´¦ÀíÍÏ¶¯
-	 */
 	private void setPosition(int left, int top, int right, int bottom) {
 		this.layout(left, top, right, bottom);
 	}
 
+	/** Helper to read display metrics without deprecated APIs. */
+	public static DisplayMetrics getDisplayMetrics(Context ctx) {
+		return ctx.getResources().getDisplayMetrics();
+	}
 }

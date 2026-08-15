@@ -1,0 +1,76 @@
+// Single-module Android application build.gradle
+// This project was migrated from legacy Ant-based build.
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.rojama.pianoshelf'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.rojama.pianoshelf"
+        minSdk 21
+        targetSdk 34
+        versionCode 2
+        versionName "2.0.0-modernized"
+    }
+
+    // Source sets kept identical to legacy Ant layout so we don't need to move files.
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = ['src']
+            resources.srcDirs = ['src']
+            aidl.srcDirs = ['src']
+            renderscript.srcDirs = ['src']
+            res.srcDirs = ['res']
+            assets.srcDirs = ['assets']
+            jniLibs.srcDirs = ['libs']
+        }
+    }
+
+    // Legacy lib/*.jar files are provided as flat file dependencies
+    dependencies {
+        implementation fileTree(dir: 'lib', include: ['*.jar'])
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard.cfg'
+        }
+    }
+
+    lint {
+        // Be tolerant of legacy deprecations while keeping build green.
+        // Real cleanup is done in source files; this only prevents lint from
+        // aborting the build on purely advisory items.
+        abortOnError false
+        disable 'GradleDeprecated', 'OldTargetApi', 'Deprecated'
+    }
+
+    packagingOptions {
+        // Avoid duplicate-files issues from legacy jars
+        pickFirsts += ['META-INF/LICENSE']
+        exclude += ['META-INF/NOTICE', 'META-INF/notice', 'META-INF/license']
+    }
+}
+
+dependencies {
+    // AndroidX / Material modern toolkit (replaces legacy support library)
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.preference:preference:1.2.1'
+    implementation 'androidx.core:core:1.12.0'
+
+    // Legacy jars from Ant build
+    implementation fileTree(dir: 'lib', include: ['*.jar'])
+}

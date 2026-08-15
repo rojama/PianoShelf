@@ -1,30 +1,85 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-	package="com.rojama.pianoshelf" android:versionCode="1"
-	android:versionName="1.0">
-	<uses-sdk android:minSdkVersion="8" />
-	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"></uses-permission>
+    package="com.rojama.pianoshelf"
+    android:versionCode="2"
+    android:versionName="2.0.0-modernized">
 
-	<application android:icon="@drawable/icon" android:label="@string/app_name">
-		<activity android:name=".PianoShelfActivity" android:label="@string/app_name"
-			android:theme="@android:style/Theme" android:configChanges="orientation|keyboardHidden|keyboard">
-			<intent-filter>
-				<action android:name="android.intent.action.MAIN" />
-				<category android:name="android.intent.category.LAUNCHER" />
-			</intent-filter>
-		</activity>
-		<activity android:name=".GraphicsActivity"
-			android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
-			android:configChanges="orientation|keyboardHidden|keyboard" android:label="@string/app_name">
-			<intent-filter>
-				<action android:name="android.intent.action.VIEW" />
-				<category android:name="android.intent.category.DEFAULT" />
-				<data android:pathPattern="*.mxl|*.xml" />
-				<data android:mimeType="application/vnd.recordare.musicxml" />
-			</intent-filter>
-		</activity>
-		<activity android:name=".AppPreferenceActivity"
-			android:configChanges=""></activity>
+    <!--
+        Modernized Manifest:
+        - Elevated minSdk to 21 (Android 5.0 Lollipop) to match Gradle config
+        - Added READ_EXTERNAL_STORAGE explicitly (WRITE implies READ pre-19, but
+          newer Android releases split them)
+        - Android 12+ requires "android:exported" on activities/services that declare
+          intent filters → set exported="true" on the two launchable activities
+        - Declares androidx.core.content.FileProvider to avoid
+          android.os.FileUriExposedException on Android 7+
+    -->
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
 
-	</application>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/icon"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.PianoShelf">
+
+        <activity
+            android:name=".PianoShelfActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".GraphicsActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.PianoShelf.Fullscreen"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.recordare.musicxml" />
+                <data android:mimeType="application/vnd.recordare.musicxml+xml" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="text/xml" />
+                <data android:mimeType="application/xml" />
+                <!-- Also accept when opened by path suffix via a file explorer -->
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:pathPattern=".*\.xml" />
+                <data android:pathPattern=".*\.mxl" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".AppPreferenceActivity"
+            android:exported="false"
+            android:label="@string/per_display"
+            android:theme="@style/Theme.PianoShelf.Settings" />
+
+        <!--
+            FileProvider: exposes specific files (e.g. external storage .xml/.mxl)
+            to GraphicsActivity as content:// URIs (avoids FileUriExposedException
+            on Android 7.0 Nougat and above).
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.rojama.pianoshelf.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
 </manifest>

@@ -1,0 +1,4 @@
+// Root-level plugin declaration only (no module config here)
+plugins {
+    id 'com.android.application' version '8.1.4' apply false
+}
