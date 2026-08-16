@@ -23,7 +23,7 @@ public class FileTypeReader {
 		}
 		bis.reset();
 		try {
-			Document doc = XMLReader.readFile(bis);	        
+			Document doc = XMLReader.readFile(SafeXmlStream.wrap(bis));	        
 			// root element
 			Element root = doc.getDocumentElement();
 			String name = root.getNodeName();

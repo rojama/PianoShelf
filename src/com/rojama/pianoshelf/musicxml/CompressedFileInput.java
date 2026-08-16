@@ -37,8 +37,8 @@ public class CompressedFileInput {
 			ZipTools.extractAll(inputStream, this.tempFolder);
 			Document doc;
 			try {
-				doc = XMLReader.readFile(new FileInputStream(new File(this.tempFolder,
-						"META-INF/container.xml")));
+				doc = XMLReader.readFile(SafeXmlStream.wrap(new FileInputStream(new File(this.tempFolder,
+						"META-INF/container.xml"))));
 			} catch (Exception ex) {
 				throw new IllegalStateException(
 						"Compressed MusicXML file has no (well-formed) META-INF/container.xml", ex);

@@ -170,7 +170,7 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 					collectDocs(cr, treeUri, docId, out, depth + 1);
 				} else if (name != null) {
 					String up = name.toUpperCase();
-					if (up.endsWith(".XML") || up.endsWith(".MXL")) {
+					if (up.endsWith(".XML") || up.endsWith(".MXL") || up.endsWith(".MUSICXML")) {
 						out.add(DocumentsContract.buildDocumentUriUsingTree(treeUri, docId));
 					}
 				}
@@ -385,7 +385,7 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 			}
 			if (file.isDirectory()) return true;
 			String upper = name.toUpperCase();
-			return upper.endsWith(".XML") || upper.endsWith(".MXL");
+			return upper.endsWith(".XML") || upper.endsWith(".MXL") || upper.endsWith(".MUSICXML");
 		}
 	}
 }

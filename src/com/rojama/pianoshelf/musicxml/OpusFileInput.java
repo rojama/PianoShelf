@@ -19,7 +19,7 @@ public class OpusFileInput {
 	public Opus readOpusFile(InputStream inputStream) throws InvalidFormatException, IOException {
 		Document doc;
 		try {
-			doc = XMLReader.readFile(inputStream);
+			doc = XMLReader.readFile(SafeXmlStream.wrap(inputStream));
 		} catch (Exception ex) {
 			throw new IOException("Opus file does not exist or has invalid format");
 		}

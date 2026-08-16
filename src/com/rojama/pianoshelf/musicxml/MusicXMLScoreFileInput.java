@@ -26,7 +26,7 @@ public class MusicXMLScoreFileInput {
 			throws InvalidFormatException, IOException {
 		MxlScorePartwise score;
 		try {
-			Document xmlDoc = XMLReader.readFile(inputStream);
+			Document xmlDoc = XMLReader.readFile(SafeXmlStream.wrap(inputStream));
 			MusicXMLDocument doc = MusicXMLDocument.read(xmlDoc);
 			score = doc.getScore();
 		} catch (InvalidMusicXML ex) {
