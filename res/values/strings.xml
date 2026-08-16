@@ -40,6 +40,9 @@
     <string name="browse_btn_open_dir">Choose folder…</string>
     <string name="browse_scoped_storage_note">Because of Scoped Storage (Android 11+) the tree view only shows the files this app can see. Use the system picker for the full device.</string>
     <string name="browse_no_matching_files">No .xml or .mxl MusicXML files were found on this device.</string>
+    <string name="browse_empty_hint">No MusicXML files here. Tap "Choose folder…" above to import via the system file picker.</string>
+    <string name="browse_doc_empty">No .xml / .mxl files found in the selected folder.</string>
+    <string name="browse_scanning">Scanning selected folder…</string>
 
     <!-- Root directory access (MANAGE_EXTERNAL_STORAGE) -->
     <string name="browse_btn_browse_root">Browse root directory…</string>

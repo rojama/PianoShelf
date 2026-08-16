@@ -33,6 +33,9 @@
 	<string name="browse_btn_open_dir">选择目录…</string>
 	<string name="browse_scoped_storage_note">由于 Android 11+ 的 Scoped Storage 分区存储机制，目录树仅显示本应用可直接访问到的文件。要看全机文件请使用系统选择器。</string>
 	<string name="browse_no_matching_files">设备内未搜索到任何 .xml / .mxl 格式乐谱文件。</string>
+	<string name="browse_empty_hint">此目录下暂无乐谱。请点上方「选择文件夹…」用系统文件管理器导入。</string>
+	<string name="browse_doc_empty">所选文件夹下未找到 .xml / .mxl 乐谱文件。</string>
+	<string name="browse_scanning">正在扫描所选文件夹…</string>
 
 	<!-- 根目录访问（MANAGE_EXTERNAL_STORAGE） -->
 	<string name="browse_btn_browse_root">浏览根目录…</string>
