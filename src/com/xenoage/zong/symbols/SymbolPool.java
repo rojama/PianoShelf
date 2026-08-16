@@ -134,31 +134,46 @@ public class SymbolPool {
 			while (eventType != XmlPullParser.END_DOCUMENT) {
 				if (eventType == XmlPullParser.START_TAG) {
 					if (xpp.getName().equals("texture")) {
-						RectSymbol symbol = loader.loadSymbol(xpp.getAttributeValue(0), Float
-								.parseFloat(xpp.getAttributeValue(1)), Float.parseFloat(xpp
-								.getAttributeValue(2)), Float.parseFloat(xpp.getAttributeValue(3)),
-								Float.parseFloat(xpp.getAttributeValue(4)));
-						RectF rectf = symbol.getBoundingRect();
-						Rect rect = new Rect();
-						rect.left = Math.round(rectf.left * bitmapWidth);
-						rect.right = Math.round(rectf.right * bitmapWidth);
-						rect.top = Math.round(rectf.top * bitmapHeight);
-						rect.bottom = Math.round(rectf.bottom * bitmapHeight);
-						int w = rect.width();
-						int h = rect.height();
-						//System.out.println(symbol.getID() + "__" + w + ":" + h);
+						try {
+							// 按属性名而非位置索引取值：XmlResourceParser 在 XML 含 xmlns:android 命名空间时，
+							// 会把命名空间声明也暴露为 attribute，导致索引偏移 1 位（index0=namespace, index1=id,…）
+							// 这就是 NumberFormatException: "accordion-1-1-1" 被 parseFloat 的根因。
+							String symId = xpp.getAttributeValue(null, "id");
+							String x1s  = xpp.getAttributeValue(null, "x1");
+							String x2s  = xpp.getAttributeValue(null, "x2");
+							String y1s  = xpp.getAttributeValue(null, "y1");
+							String y2s  = xpp.getAttributeValue(null, "y2");
+							String bases = xpp.getAttributeValue(null, "base");
+							if (symId == null || x1s == null || x2s == null || y1s == null || y2s == null || bases == null) {
+								throw new IllegalArgumentException("texture 属性缺失: id=" + symId + " x1=" + x1s + " x2=" + x2s + " y1=" + y1s + " y2=" + y2s + " base=" + bases);
+							}
+							RectSymbol symbol = loader.loadSymbol(symId,
+									Float.parseFloat(x1s), Float.parseFloat(x2s),
+									Float.parseFloat(y1s), Float.parseFloat(y2s));
+							RectF rectf = symbol.getBoundingRect();
+							Rect rect = new Rect();
+							rect.left = Math.round(rectf.left * bitmapWidth);
+							rect.right = Math.round(rectf.right * bitmapWidth);
+							rect.top = Math.round(rectf.top * bitmapHeight);
+							rect.bottom = Math.round(rectf.bottom * bitmapHeight);
+							int w = rect.width();
+							int h = rect.height();
 
-						Matrix m = new Matrix();
-						if (bitmapWidth == 512) {
-							m.postScale(0.5F, 0.5F);
+							Matrix m = new Matrix();
+							if (bitmapWidth == 512) {
+								m.postScale(0.5F, 0.5F);
+							}
+							Bitmap bitmapSymbol = Bitmap.createBitmap(bitmap, rect.left, rect.top, rect
+									.width(), rect.height(), m, true);
+							symbol.setTopToBase(Math.round(bitmapSymbol.getHeight()
+									* Float.parseFloat(bases)));
+							symbol.setBitmap(bitmapSymbol);						
+							this.symbols.put(symbol.getID(), symbol);
+							loaded++;
+						} catch (Throwable t) {
+							DebugLog.w(TAG, "  [skip] 单个 texture 解析失败（忽略，不影响其它符号）: " + xpp.getAttributeValue(null, "id"), t);
+							skipped++;
 						}
-						Bitmap bitmapSymbol = Bitmap.createBitmap(bitmap, rect.left, rect.top, rect
-								.width(), rect.height(), m, true);
-						symbol.setTopToBase(Math.round(bitmapSymbol.getHeight()
-								* Float.parseFloat(xpp.getAttributeValue(5))));
-						symbol.setBitmap(bitmapSymbol);						
-						this.symbols.put(symbol.getID(), symbol);
-						loaded++;
 					} else {
 						skipped++;
 					}
