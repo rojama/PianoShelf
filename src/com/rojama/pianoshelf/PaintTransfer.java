@@ -103,12 +103,17 @@ public class PaintTransfer {
 		nowPage = 1;
 		nowLine = 1;
 		nowMeasure = 0;
+		nowDuration = 0;
 		measureLeft = 0;
 		measureUp = 0;
 		measureWidth = 0;
 		measureUpAll.clear();
 		nowClefType.clear();
 		staffLayout.clear();
+		// divisions 兜底默认 16（MusicXML 里最常见的默认值：
+		// 1 quarter note = 16 divisions；若 XML 有 <attributes><divisions> 会随后覆盖）
+		// 避免 MxlNote.print 里 nowDuration*64/divisions 除零导致 duration/type 全算错。
+		divisions = 16;
 		block = false;
 		firstIn = true;
 		// oldMeasure.clear(); //已经处理过的小节

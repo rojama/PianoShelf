@@ -1,13 +1,20 @@
 package com.rojama.pianoshelf;
 
 import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.PointF;
 import android.util.DisplayMetrics;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.animation.TranslateAnimation;
 import android.widget.ImageView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 继承 ImageView 实现多点触控拖动、双指连续缩放、左右滑动翻页。
@@ -17,6 +24,8 @@ import android.widget.ImageView;
  *  - 使用 ScaleGestureDetector 实现真正连续的 Pinch-to-Zoom（不用增量的 BIGGER/SMALLER）
  *  - 使用 GestureDetector 监听 onFling 实现左右滑动 → 翻页回调
  *  - 增加 PageFlipListener 接口，由外部 Activity/GraphicsView 响应翻页动作
+ *  - 增加播放当前音符高亮：{@link #setHighlightNotes(List, int, int)} 传入音符 bitmap 坐标列表，
+ *    onDraw 时按当前 zoomX/zoomY + 左上角偏移折算到屏幕像素画红框
  */
 public class TouchView extends ImageView {
 
@@ -60,6 +69,64 @@ public class TouchView extends ImageView {
     private PageFlipListener pageFlipListener;
     public void setPageFlipListener(PageFlipListener listener) {
         this.pageFlipListener = listener;
+    }
+
+    // ===== 播放音符高亮 =====
+    /**
+     * 单个高亮框的"bitmap 内坐标"（即 CommonTransfer bitmap 的像素坐标，
+     * 也就是 note.point.x/y，单位是 canvas 内部像素，未经过 CommonTransfer.zoomX/zoomY 缩放）。
+     * 注意：实际绘制到 screen 时需要：
+     *   screenX = left + (noteX * zoomX / SYMBOL_SCALE_BASE_TO_IMG ???)
+     * 但我们的 CommonTransfer.setAutoZoom 已经在 canvas.scale(zoomX,zoomY) 之前画到 bitmap 上，
+     * 所以 bitmap 的物理像素 ≈ pageWidth*zoomX；GraphicsView.setHighlightNotes 会先把
+     * note.point（canvas 内部坐标）乘以 zoomX/zoomY 转换为 bitmap 像素坐标后再传进来。
+     * 所以这里的 x/y 是"bitmap 内的像素坐标"，我们按 view 自身缩放/平移直接显示即可。
+     */
+    public static class HighlightRect {
+        public final float left;
+        public final float top;
+        public final float right;
+        public final float bottom;
+        public HighlightRect(float l, float t, float r, float b) { left=l; top=t; right=r; bottom=b; }
+    }
+    private final List<HighlightRect> highlightRects = new ArrayList<HighlightRect>();
+    private final Paint highlightPaint = new Paint();
+    {
+        highlightPaint.setColor(Color.RED);
+        highlightPaint.setStyle(Paint.Style.STROKE);
+        highlightPaint.setStrokeWidth(3f);
+        highlightPaint.setAntiAlias(true);
+    }
+    /**
+     * 刷新当前高亮音符（bitmap 坐标系内的矩形框），并触发重绘。
+     * @param rects 为 null/empty 表示清除所有高亮
+     */
+    public void setHighlightNotes(List<HighlightRect> rects) {
+        synchronized (highlightRects) {
+            highlightRects.clear();
+            if (rects != null) highlightRects.addAll(rects);
+        }
+        postInvalidate();
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        // 先画乐谱图（super），再在上面叠红色高亮框
+        synchronized (highlightRects) {
+            if (highlightRects.isEmpty()) return;
+            // Drawable/bitmap 画出来的起点就是 view 的 0,0（相对 canvas）。
+            // view 尺寸 = img * scale，所以"bitmap 内坐标 → 本 view canvas 坐标"比例 = getWidth / imgW
+            final float ratioX = (imgW > 0) ? (float) getWidth() / imgW : 1f;
+            final float ratioY = (imgH > 0) ? (float) getHeight() / imgH : 1f;
+            for (HighlightRect r : highlightRects) {
+                float l = r.left * ratioX;
+                float t = r.top * ratioY;
+                float ri = r.right * ratioX;
+                float bo = r.bottom * ratioY;
+                canvas.drawRect(l, t, ri, bo, highlightPaint);
+            }
+        }
     }
 
     public TouchView(Context context, int w, int h) {

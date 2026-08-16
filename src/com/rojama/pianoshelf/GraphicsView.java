@@ -292,12 +292,34 @@ public class GraphicsView {
 			}
 			ct.appPrefs = appPrefs;
 			ct.paint = paint;
+
+			// ===== 修复：首次加载先"全量扫描一遍"，收集所有页的音符到 scorePartsNotes =====
+			// 不做这一步：后续 paint(disPageNo) 只渲染当前页 → scorePartsNotes 只有当前页
+			// → 点击播放时只有当前页那几个音会响、后面静默。
+			DebugLog.i(TAG, "=== 阶段 1/2：全量 collect 音符（不绘制到 canvas） ===");
+			ct.scorePartsNotes.clear();
+			ct.collectAllNotesForPlayback = true;
+			int savedDisPageNo = ct.disPageNo;
+			ct.disPageNo = -999; // 故意设一个不可能的值，让分页逻辑走完所有页
+			long tc0 = System.currentTimeMillis();
+			int total = scoreList.size();
+			for (int i = 0; i < total; i++) {
+				MxlScorePartwise sub = scoreList.get(i);
+				sub.paint(ct);
+			}
+			long tc1 = System.currentTimeMillis();
+			ct.collectAllNotesForPlayback = false;
+			ct.disPageNo = savedDisPageNo;
+			int totalNotes = 0;
+			for (java.util.Vector<Note> v : ct.scorePartsNotes.values()) totalNotes += v.size();
+			DebugLog.i(TAG, String.format("=== collect 完成：%d 个声部，共 %d 个音符，耗时 %d ms ===",
+					ct.scorePartsNotes.size(), totalNotes, (tc1 - tc0)));
 		}
 		if (ct == null || scoreList == null) {
 			throw new IllegalStateException("Cannot render: init failed (ct=" + ct + ", scoreList=" + scoreList + ")");
 		}
 		postProgress(ST_PAINT - 15, "渲染第 " + dispalyPageNo + " 页 0%");
-		DebugLog.d(TAG, "ct.setDisPageNo(dispalyPageNo=" + dispalyPageNo + ")");
+		DebugLog.d(TAG, "=== 阶段 2/2：按 disPageNo=" + dispalyPageNo + " 渲染到 canvas ===");
 		ct.setDisPageNo(dispalyPageNo);
 		int total = scoreList.size();
 		int done = 0;
@@ -382,22 +404,28 @@ public class GraphicsView {
 
 		// Compute playback note plan: Map<tick, List<Note-to-play-at-tick>>
 		final Map<Integer, Vector<Note>> plan = buildPlaybackPlan();
-		if (plan.isEmpty()) return;
+		if (plan.isEmpty()) {
+			DebugLog.w(TAG, "play(): buildPlaybackPlan 返回空，停止启动播放");
+			return;
+		}
 
 		timeCounter.set(0);
 		maxTime = computeMaxTime(plan);
 		playing.set(true);
 		notifyPlayStateChanged();
 		notifyProgress();
+		// 先清一次高亮
+		applyHighlightForTick(0, plan);
 
 		// Start scheduler with 2 threads (tick + spare)
 		scheduler = Executors.newScheduledThreadPool(2);
 
 		// Tick: every PARTTIME_MS advance clock; dispatch notes scheduled at the new tick value
+		final Map<Integer, Vector<Note>> finalPlan = plan;
 		tickFuture = scheduler.scheduleAtFixedRate(new Runnable() {
 			@Override public void run() {
 				int now = timeCounter.incrementAndGet();
-				Vector<Note> notes = plan.get(now);
+				Vector<Note> notes = finalPlan.get(now);
 				if (notes != null) {
 					for (Note n : notes) {
 						if (n.pitch != null) {
@@ -406,6 +434,8 @@ public class GraphicsView {
 						}
 					}
 				}
+				// 刷新高亮（只高亮当前页的音）
+				applyHighlightForTick(now, finalPlan);
 				// 每隔若干 tick 向 UI 线程推送进度（避免每条都 IPC）
 				if (now % 4 == 0) {
 					mainHandler.post(new Runnable() {
@@ -421,6 +451,44 @@ public class GraphicsView {
 				}
 			}
 		}, PARTTIME_MS, PARTTIME_MS, TimeUnit.MILLISECONDS);
+	}
+
+	/** 根据当前 tick，把落在当前页、该 tick 的音符转为屏幕高亮框。 */
+	private void applyHighlightForTick(final int tick, final Map<Integer, Vector<Note>> plan) {
+		final TouchView tv = (detail == null) ? null : detail.tv;
+		if (tv == null || ct == null) return;
+		final int curPage = dispalyPageNo;
+		final float zx = ct.zoomX, zy = ct.zoomY;
+		final int SP = ct.STAFF_LINE_SPACING;
+		final int boxPad = Math.max(3, Math.round(SP * 0.8f));
+		final Vector<Note> notesAtTick = plan.get(tick);
+		mainHandler.post(new Runnable() {
+			@Override public void run() {
+				if (notesAtTick == null || notesAtTick.isEmpty()) {
+					tv.setHighlightNotes(null);
+					return;
+				}
+				List<TouchView.HighlightRect> rects = new ArrayList<TouchView.HighlightRect>();
+				for (Note n : notesAtTick) {
+					if (n.pageNum != curPage) continue;
+					if (n.point == null) continue;
+					// n.point 是 canvas 逻辑坐标（在 setAutoZoom canvas.scale(zx,zy) 之前）
+					// bitmap 物理像素 ≈ 逻辑坐标 * zx / zy
+					float bx = n.point.x * zx;
+					float by = n.point.y * zy;
+					// 高亮框以 note head 中心向四周延伸 boxPad 像素（bitmap 坐标系内）
+					float pad = boxPad * Math.max(zx, zy);
+					float w = 24f * Math.max(1f, zx); // ≈ note head width in bitmap px
+					float h = 24f * Math.max(1f, zy);
+					float left = bx - w * 0.1f - pad;
+					float top  = by - h * 0.5f - pad;
+					float right= bx + w + pad;
+					float bottom= by + h * 0.5f + pad;
+					rects.add(new TouchView.HighlightRect(left, top, right, bottom));
+				}
+				tv.setHighlightNotes(rects);
+			}
+		});
 	}
 
 	/** Return true if playback is currently running. */
@@ -462,18 +530,34 @@ public class GraphicsView {
 	/** Build per-tick note list from CommonTransfer note accumulator. */
 	private Map<Integer, Vector<Note>> buildPlaybackPlan() {
 		Map<Integer, Vector<Note>> plan = new HashMap<Integer, Vector<Note>>();
+		int notesAdded = 0;
+		int skippedNoPitch = 0;
+		int skippedBadDivisions = 0;
 		for (Vector<Note> notes : ct.scorePartsNotes.values()) {
 			if (notes == null) continue;
 			for (Note n : notes) {
-				int tick = n.duration;
+				// ===== tick 换算统一放这里：
+				// 原始 n.duration 是以 n.divisions 为单位的 start-time。
+				// 播放 tick 定义：64 = 四分音符。所以：
+				//   tick = n.duration * 64 / n.divisions
+				int d = Math.max(1, n.divisions);
+				long tickLong = (long) n.duration * 64L / d;
+				if (tickLong < 0) { skippedBadDivisions++; continue; }
+				int tick = (int) Math.min(Integer.MAX_VALUE, tickLong);
+				if (n.pitch == null) { skippedNoPitch++; /* 休止符也入 bucket，但 play() 不会响；这里跳过以节省 plan 大小 */ continue; }
 				Vector<Note> bucket = plan.get(tick);
 				if (bucket == null) {
 					bucket = new Vector<Note>(4);
 					plan.put(tick, bucket);
 				}
 				bucket.add(n);
+				notesAdded++;
 			}
 		}
+		DebugLog.i(TAG, "buildPlaybackPlan 完成：plan 大小(bucket数)=" + plan.size()
+				+ "  音符数(入bucket 非rest)=" + notesAdded
+				+ "  休止符跳过=" + skippedNoPitch
+				+ "  badTick跳过=" + skippedBadDivisions);
 		return plan;
 	}
 

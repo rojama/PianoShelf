@@ -252,7 +252,11 @@ public final class MxlNote implements MxlMusicDataContent {
 
 	@Override
 	public void print(PaintTransfer pt) {
-		if (pt.nowPage != pt.ct.getDisPageNo())
+		// ===== 修复：全量收集阶段不过早 return，否则非当前页音符不会写入 scorePartsNotes =====
+		// collectAllNotesForPlayback=true：扫描所有页，仅收集 note（不绘制到 canvas）
+		// collectAllNotesForPlayback=false：按原逻辑，只处理当前页
+		final boolean collectMode = pt.ct.collectAllNotesForPlayback;
+		if (!collectMode && pt.nowPage != pt.ct.getDisPageNo())
 			return;
 
 		pt.measureUp = pt.getMeasureUp(getStaff());
@@ -263,6 +267,11 @@ public final class MxlNote implements MxlMusicDataContent {
 		note.measureNum=pt.nowMeasure;		
 		note.pageNum = pt.nowPage;
 		note.partID=pt.nowPartID;
+		// ====== 定位 bug-1 修复前置准备：
+		// note.point 与 addNote 延后到"Pitch/Rest 坐标完全算完之后"再执行（否则 oldY=0/脏值）。
+		// 这里先用两个变量暂存。
+		boolean pendingNote = false;       // 标记"该音符需要登记到 scorePartsNotes"
+		float pendingNoteRelX = pt.oldX;   // 在 measure 内的相对 X（chord 不前进，用此时 oldX）
 //		System.out.println(this.duration + " * 64 / " + pt.divisions);
 		
 		if (this.getType() == null && this.getContent() != null && pt.divisions != 0) {
@@ -312,37 +321,28 @@ public final class MxlNote implements MxlMusicDataContent {
 		if (this.getContent().getNoteContentType() == MxlNoteContentType.Normal) {
 			MxlNormalNote mnn = (MxlNormalNote) content;
 			isSameX = mnn.getFullNote().isChord();
-			note.duration = pt.nowDuration * 64 / pt.divisions;
+			// ===== 修复 tick 对齐：直接存 divisions 单位的 nowDuration，不再做 *64/divisions
+			// 真正的播放 tick 换算放到 buildPlaybackPlan 中统一处理 =====
+			note.duration = pt.nowDuration;
+			note.divisions = Math.max(1, pt.divisions);
 			
-			//加入音符
+			//加入音符（音高先登记；坐标/正式入库延后到绘制分支里）
 			if (mnn.getFullNote().getContent().getFullNoteContentType() == MxlFullNoteContentType.Pitch){
 				note.pitch = ((MxlPitch) mnn.getFullNote().getContent()).getPitch();				
 			}
-			note.point = new PointF(pt.oldX,pt.oldY);
-			if (!pt.ct.scorePartsNotes.containsKey(pt.nowPartID)){
-				pt.ct.scorePartsNotes.put(pt.nowPartID, new Vector<Note>());
-			}
-			
-			pt.ct.scorePartsNotes.get(pt.nowPartID).add(note);
+			pendingNote = true;  // Pitch/Rest 都走 pendingNote 流程
 			if (!mnn.getFullNote().isChord()){
 				pt.nowDuration += mnn.getDuration();
 			}
-			
-//			if (isSameX){
-//				Vector<Note> notes = pt.ct.scorePartsNotes.get(pt.nowPartID).lastElement();
-//				notes.add(note);
-//			}else{
-//				Vector<Note> notes = new Vector<Note>();
-//				notes.add(note);
-//				
-//			}
 		}
 		
 		float oldLastNoteX = pt.lastNoteX;
 		
-		// 取音符坐标
+		// 取音符坐标（printStyle default-x/y / relative-x/y 会改 oldX、oldY）
 		if (this.getPrintStyle() != null) {
 			pt.setPointInMeasure(this.getPrintStyle().getPosition());
+			// printStyle 改了 X → 同步暂存
+			pendingNoteRelX = pt.oldX;
 //			if (pt.oldX <= pt.lastNoteX + pt.ct.NOTE_WIDTH && pt.oldX >= pt.lastNoteX - pt.ct.NOTE_WIDTH) {
 //				isSameX = true;
 //			}
@@ -410,6 +410,20 @@ public final class MxlNote implements MxlMusicDataContent {
 				int line = ct.computeLinePosition(pitch.getPitch());
 				final int SP = pt.ct.STAFF_LINE_SPACING;
 				pt.oldY = 4 * SP - line * SP / 2;
+
+				// ====== 定位 bug-1 修复:
+				// 只有在 oldY 正确计算后（考虑 clef + line + printStyle），
+				// 才能把 note 坐标写入 Note.point，并存入 scorePartsNotes 供高亮/播放索引。
+				// Note.point 存绝对画布坐标：(measureLeft + relX, measureUp + oldY)
+				if (pendingNote) {
+					note.point = new PointF(pt.measureLeft + pendingNoteRelX,
+							pt.measureUp + pt.oldY);
+					if (!pt.ct.scorePartsNotes.containsKey(pt.nowPartID)) {
+						pt.ct.scorePartsNotes.put(pt.nowPartID, new Vector<Note>());
+					}
+					pt.ct.scorePartsNotes.get(pt.nowPartID).add(note);
+					pendingNote = false;
+				}
 				// note head 绘制：topToBase 按 SYMBOL_SCALE 同比缩
 				pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + pt.oldY
 						- pt.symTopToBase(symbol) + 1);
@@ -586,6 +600,16 @@ public final class MxlNote implements MxlMusicDataContent {
 			case Rest:
 				final int SP_R = pt.ct.STAFF_LINE_SPACING;
 				pt.oldY = 2 * SP_R;
+				// ====== 定位 bug-1 修复：休止符也要在算完 oldY 后写入 scorePartsNotes（方便后续高亮/光标指示）
+				if (pendingNote) {
+					note.point = new PointF(pt.measureLeft + pendingNoteRelX,
+							pt.measureUp + pt.oldY);
+					if (!pt.ct.scorePartsNotes.containsKey(pt.nowPartID)) {
+						pt.ct.scorePartsNotes.put(pt.nowPartID, new Vector<Note>());
+					}
+					pt.ct.scorePartsNotes.get(pt.nowPartID).add(note);
+					pendingNote = false;
+				}
 				switch (this.getType().type) {
 				case _256TH:
 					symbol = pt.ct.symbolPool.getSymbol(CommonSymbol.Rest256th);
@@ -644,13 +668,19 @@ public final class MxlNote implements MxlMusicDataContent {
 		// 画附点符
 		{
 			final int SP = pt.ct.STAFF_LINE_SPACING;
+			// ====== 定位 bug-2 修复：
+			// 原代码 if (pt.oldY % SP == 0) pt.oldY -= SP/2 会修改全局 pt.oldY，
+			// 导致后续判断"下一个音符/附点"的 Y 坐标被意外上移半个间距。
+			// 改用局部变量 dotY，只在绘制附点时应用临时调整，绝不污染全局 pt.oldY。
+			float dotY = pt.oldY;
 			for (int i = 0; i < this.getDot(); i++) {
-				if (pt.oldY % SP == 0) { // 防止附点符被五线谱覆盖（当线与附点Y对齐时上移半个间距）
-					pt.oldY -= SP / 2;
+				float curDotY = dotY;
+				if (curDotY % SP == 0) { // 防止附点符被五线谱覆盖（当线与附点Y对齐时上移半个间距）
+					curDotY -= SP / 2f;
 				}
 				Symbol dotSymbol = pt.ct.symbolPool.getSymbol(CommonSymbol.NoteDot);
 				if (dotSymbol != null) {
-					pt.drawBitmap(dotSymbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + pt.oldY
+					pt.drawBitmap(dotSymbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + curDotY
 							- pt.symTopToBase(dotSymbol));
 					pt.oldX += pt.symW(dotSymbol) + pt.ct.SPACE;
 				}

@@ -70,6 +70,18 @@ public class GraphicsActivity extends AppCompatActivity {
 
 		DebugLog.ensureInitialized(this);
 		DebugLog.i(TAG, "========== GraphicsActivity.onCreate 启动 ==========");
+
+		// ===== 修复: 播放无声 ===
+		// SoundPoolUtiil.loadSound 原先只在 PianoShelfActivity（文件列表页）调用。
+		// 如果用户通过 ACTION_VIEW / 分享直接跳到本 Activity，SoundPool 从未初始化 → 所有 playSound 全静默。
+		// 这里无论什么启动路径都保证预先加载一遍钢琴键音频。
+		try {
+			DebugLog.i(TAG, "预加载钢琴音色: SoundPoolUtiil.loadSound(this)");
+			SoundPoolUtiil.loadSound(this);
+		} catch (Throwable t) {
+			DebugLog.e(TAG, "SoundPoolUtiil.loadSound 失败（音频可能无法播放）", t);
+		}
+
 		writeSessionHeader(getIntent());
 
 		// 无论 filepath 是不是 null，setContentView 之后都先把 UI 组件初始化一次并绑定日志面板，

@@ -97,6 +97,16 @@ public class CommonTransfer {
 	public int disPageNo = 1;
 	public int maxPage = 0;
 
+	/**
+	 * 全量收集开关：
+	 *  - true：MxlNote/MxlMeasure 跳过"非当前页 return"，把所有页的音符都写入 scorePartsNotes
+	 *          同时 PaintTransfer 不真正绘制到 Canvas（不调 drawBitmap/drawLine/drawText/drawPath）
+	 *  - false：正常渲染当前页，非当前页直接 return
+	 *  解决问题：原先 paint 只渲染 disPageNo 对应页，导致 scorePartsNotes 里只有当前页音符
+	 *            → 后面页播放时 plan 为空，表现为"进度在走但没声音"。
+	 */
+	public boolean collectAllNotesForPlayback = false;
+
 	public void setScreen(int w, int h) {
 		this.screenHeight = h;
 		this.screenWidth = w;

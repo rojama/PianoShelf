@@ -85,8 +85,16 @@ public final class MxlScorePartwise
 	  com.rojama.pianoshelf.DebugLog.ensureInitialized(ct.context);
 	  long t0 = System.currentTimeMillis();
 	  com.rojama.pianoshelf.DebugLog.i("MxlPaint", "MxlScorePartwise.paint(ct) 开始：disPageNo=" + ct.disPageNo
-			  + "  parts=" + (parts == null ? 0 : parts.size()) + "  maxPage(已知)=" + ct.maxPage);
-	  ct.scorePartsNotes.clear();
+			  + "  parts=" + (parts == null ? 0 : parts.size()) + "  maxPage(已知)=" + ct.maxPage
+			  + "  collectAllNotesForPlayback=" + ct.collectAllNotesForPlayback);
+	  // ===== 修复：全量收集阶段不清空 scorePartsNotes =====
+	  // collectAllNotesForPlayback=true 时：从头扫描整份乐谱，把所有页所有音符累积到 scorePartsNotes
+	  // collectAllNotesForPlayback=false 时：正常渲染，若之前已经跑过 collect 阶段则不清空（直接复用）
+	  //   但 oldPaintTransfer/oldPartID 仍然要清空（渲染状态不能串）
+	  if (!ct.collectAllNotesForPlayback && ct.scorePartsNotes.isEmpty()) {
+		  // 只有"没做过 collect 阶段"的首次渲染才清空（兼容旧直接渲染路径）
+		  ct.scorePartsNotes.clear();
+	  }
 	  ct.oldPaintTransfer.clear();
 	  ct.oldPartID = null;
 	  

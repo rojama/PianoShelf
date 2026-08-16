@@ -81,7 +81,10 @@ public final class MxlMeasure {
 		}
 		this.musicData.print(pt);
 
-		if (pt.nowPage != pt.ct.getDisPageNo() || pt.block)
+		// ===== 修复：全量收集阶段不因为"非当前页"而 return =====
+		// （否则 measure 不会推进 nowLine / nowMeasure，导致后续所有小节的 nowPage 一直不等于 disPageNo）
+		final boolean collectMode = pt.ct.collectAllNotesForPlayback;
+		if (!collectMode && (pt.nowPage != pt.ct.getDisPageNo() || pt.block))
 			return;
 		
 		//Log.d("MeasureDone", pt.nowPartID + ":" + this.number + "/" + this.width + "/" + pt.nowLine + "/" + pt.measureUp);
