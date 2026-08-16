@@ -6,8 +6,12 @@ pluginManagement {
         gradlePluginPortal()
     }
 }
+// 修复：把 FAIL_ON_PROJECT_REPOS 改成 PREFER_SETTINGS，
+// 否则 build.gradle 的 buildscript { repositories { google(); mavenCentral() } }
+// 会被 Gradle 8.x / AGP 8.x 按 "声明式仓库 vs 项目仓库混合" 直接判定为构建失败，
+// 报错形如 "Build was configured to prefer settings repositories over project repositories"。
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         google()
         mavenCentral()
