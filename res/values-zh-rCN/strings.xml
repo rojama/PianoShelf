@@ -5,6 +5,22 @@
 	<string name="tab_recent">最近打开</string>
 	<string name="tab_favorite">收藏夹</string>
 	<string name="tab_online">在线乐谱</string>
+	<string name="tab_settings">设置</string>
+
+	<!-- 底部导航短名称（必须精简以适配药丸宽度） -->
+	<string name="tab_browse_short">浏览</string>
+	<string name="tab_recent_short">最近</string>
+	<string name="tab_online_short">在线</string>
+	<string name="tab_favorite_short">收藏</string>
+	<string name="tab_settings_short">设置</string>
+
+	<!-- HyperOS 风格大标题（每个Tab顶部显示的大号文字标题） -->
+	<string name="home_big_title">便携乐谱</string>
+	<string name="browse_section_subtitle">浏览乐谱</string>
+	<string name="recent_section_subtitle">最近打开</string>
+	<string name="online_section_subtitle">在线乐谱</string>
+	<string name="favorite_section_subtitle">收藏夹</string>
+	<string name="settings_section_subtitle">设置</string>
 	<string name="info_add_favorite">添加收藏</string>
 	<string name="info_remove_favorite">移除收藏</string>
 	<string name="info_canot_read">文件不可读</string>

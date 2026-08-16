@@ -15,14 +15,12 @@ import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.text.TextUtils;
-import android.view.Menu;
-import android.view.MenuItem;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.TabHost;
-import android.widget.TabWidget;
-import android.widget.TabHost.OnTabChangeListener;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -41,36 +39,29 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * 主界面 (入口 Activity) — Scoped Storage 重构版。
+ * 便携乐谱 主界面 (入口 Activity) — HyperOS 3 风格 UI 重写版
  *
- * 背景（为什么小米 14 / 安卓 14 浏览乐谱是空的）：
- *   旧版 PianoShelfActivity 通过 TabBrowseList 直接递归扫描
- *   Environment.getExternalStorageDirectory()（= /sdcard 根），依赖
- *   READ_EXTERNAL_STORAGE。但从 Android 13 (API 33, 小米14 出厂/常搭载) 开始，
- *   该权限变成「零授予」：就算 AndroidManifest 声明了、用户也点了允许，
- *   ContextCompat.checkSelfPermission 依然是 DENIED，于是 File("/").listFiles()
- *   一律返回 null → TabBrowseList 看见的就是空的。
+ * UI 重构内容（2026-08）：
+ *   1. 去除顶部 ActionBar + 三点菜单
+ *   2. Tab 从顶部 TabHost 移到屏幕底部（自定义 5 个胶囊按钮）
+ *   3. Tab 顺序：浏览 / 最近 / 在线(中间) / 收藏 / 设置
+ *   4. 选中 Tab 采用 HyperOS 药丸高亮（靛蓝色胶囊背景）
+ *   5. 设置 Tab 独立为最右侧图标，点击直接打开 Settings Activity
+ *   6. 退出功能移除（用户按系统返回键即可）
  *
- * 修复策略（按稳定性 / 兼容性排序）：
- *   [A] 对 Android 11+（API 30+，即 Scoped Storage 强制打开）：
- *        - TabBrowse 顶部新增两块入口：
- *            ① 「打开乐谱文件」→ ACTION_OPEN_DOCUMENT 系统文件选择器
- *                (用户可在任意路径/USB/云盘上挑选 .xml / .mxl / .musicxml)
- *            ② 「选择目录」→ ACTION_OPEN_DOCUMENT_TREE (用户授权一个目录后，
- *                通过 DocumentsContract 列出该目录下所有乐谱)
- *        - 同时在 TabBrowseList 的空白 header 处额外显示
- *            MediaStore.Files 聚合查询到的所有 .xml/.mxl（系统媒体索引，
- *            无需任何存储权限即可读取），这是"零配置"能看到的最多文件。
- *   [B] 对 Android 6 ~ 12（API 23-32）：保留旧的动态权限 + 文件目录树，
- *        这部分逻辑已经可用，不做破坏性更改。
- *   [C] GraphicsActivity 接收 content:// URI（来自 SAF/FileProvider/外部 App）
- *        后统一复制到 app cache，再走原 FileReader 路径，避免原始
- *        "new File(new URI(data))" 解析 content:// 时直接抛 IllegalArgumentException。
- *   [D] 权限请求时机：只在实际需要 legacy tree 时才请求旧 READ 权限；Android13+
- *        一律引导用户走 SAF，不再弹"被拒的假权限"骚扰用户。
+ * 存储访问策略延续上版：
+ *   - Android 11+：MANAGE_EXTERNAL_STORAGE 授权 → 直接列 /storage/emulated/0
+ *   - 零权限：MediaStore.Files 聚合 + SAF 系统选择器
  */
 public class PianoShelfActivity extends AppCompatActivity {
 	private static final String TAG = "PianoShelf";
+
+	// Tab position constants (matches bottom nav order in main.xml)
+	public static final int TAB_BROWSE   = 0;
+	public static final int TAB_RECENT   = 1;
+	public static final int TAB_ONLINE   = 2; // CENTER
+	public static final int TAB_FAVORITE = 3;
+	public static final int TAB_SETTINGS = 4; // RIGHTMOST
 
 	// 权限 / SAF request codes
 	private static final int REQ_LEGACY_STORAGE = 1000;
@@ -78,8 +69,21 @@ public class PianoShelfActivity extends AppCompatActivity {
 	public  static final int REQ_OPEN_MUSICXML_TREE = 1011;
 	public  static final int REQ_MANAGE_ALL_FILES = 1012;
 
-	public TabHost mTabHost = null;
-	public TabWidget mTabWidget = null;
+	// 上半部分内容容器（5 个子容器 FrameLayout 动态加入）
+	private FrameLayout mContentFrame;
+
+	// 每个 Tab 对应一个独立容器（wrap TabXXXList），切换用 setVisibility
+	private FrameLayout mBrowseContainer;
+	private FrameLayout mRecentContainer;
+	private FrameLayout mOnlineContainer;
+	private FrameLayout mFavoriteContainer;
+
+	// 底部 Tab 按钮（btn = 外层可点击容器；pill = 药丸高亮容器）
+	private View[] mTabBtns = new View[5];
+	private View[] mTabPills = new View[5];
+
+	private int mCurrentTab = TAB_BROWSE;
+
 	public DatabaseHelper dbhelp;
 	TabBrowseList tbl;
 	TabRecentList trl;
@@ -91,52 +95,62 @@ public class PianoShelfActivity extends AppCompatActivity {
 		setContentView(R.layout.main);
 
 		// --- HyperOS 3 / MIUI 状态栏高度适配 ---
-		// 小米 HyperOS 3 (Android 14/15) 上 fitsSystemWindows 可能因主题层级原因
-		// 没有正确传递到 TabHost 内部，导致内容被状态栏遮挡。
-		// 这里手动获取状态栏高度并应用为根容器的顶部 padding。
 		applyStatusBarInsets();
 
 		try {
 			dbhelp = new DatabaseHelper(this);
 
-			mTabHost = (TabHost) findViewById(android.R.id.tabhost);
-			mTabHost.setup();
-			mTabWidget = mTabHost.getTabWidget();
-			mTabHost.addTab(mTabHost.newTabSpec("browse").setContent(R.id.tab_browse).setIndicator(
-					getText(R.string.tab_browse)));
-			mTabHost.addTab(mTabHost.newTabSpec("recent").setContent(R.id.tab_recent).setIndicator(
-					getText(R.string.tab_recent)));
-			mTabHost.addTab(mTabHost.newTabSpec("favorite").setContent(R.id.tab_favorite)
-					.setIndicator(getText(R.string.tab_favorite)));
-			mTabHost.addTab(mTabHost.newTabSpec("online").setContent(R.id.tab_online)
-					.setIndicator(getText(R.string.tab_online)));
+			// 获取布局中的容器 & Tab 按钮
+			mContentFrame = findViewById(R.id.content_frame);
 
-			LinearLayout ll = (LinearLayout) this.findViewById(R.id.tab_browse);
+			// Tab 按钮引用（外层 clickable）
+			mTabBtns[TAB_BROWSE]   = findViewById(R.id.tab_browse_btn);
+			mTabBtns[TAB_RECENT]   = findViewById(R.id.tab_recent_btn);
+			mTabBtns[TAB_ONLINE]   = findViewById(R.id.tab_online_btn);
+			mTabBtns[TAB_FAVORITE] = findViewById(R.id.tab_favorite_btn);
+			mTabBtns[TAB_SETTINGS] = findViewById(R.id.tab_settings_btn);
+
+			// Tab 药丸（承载 bg selector + checked state）
+			mTabPills[TAB_BROWSE]   = findViewById(R.id.tab_browse_pill);
+			mTabPills[TAB_RECENT]   = findViewById(R.id.tab_recent_pill);
+			mTabPills[TAB_ONLINE]   = findViewById(R.id.tab_online_pill);
+			mTabPills[TAB_FAVORITE] = findViewById(R.id.tab_favorite_pill);
+			mTabPills[TAB_SETTINGS] = findViewById(R.id.tab_settings_pill);
+
+			// ==================== 创建 4 个内容容器（设置 Tab 直接起 Activity） ====================
+			mBrowseContainer   = createTabContentWithHeader(R.string.browse_section_subtitle, true);
+			mRecentContainer   = createTabContentWithHeader(R.string.recent_section_subtitle, true);
+			mOnlineContainer   = createTabContentWithHeader(R.string.online_section_subtitle, true);
+			mFavoriteContainer = createTabContentWithHeader(R.string.favorite_section_subtitle, true);
+
+			mContentFrame.addView(mBrowseContainer,   newFrameParams());
+			mContentFrame.addView(mRecentContainer,   newFrameParams());
+			mContentFrame.addView(mOnlineContainer,   newFrameParams());
+			mContentFrame.addView(mFavoriteContainer, newFrameParams());
+
+			// 把原来的 4 个 TabXxxList View 塞进对应的容器（放进 header 之后的垂直 linear 的第 2 格）
 			tbl = new TabBrowseList(this);
-			ll.addView(tbl, new LinearLayout.LayoutParams(
-					LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
-			ll = (LinearLayout) this.findViewById(R.id.tab_recent);
-			trl = new TabRecentList(this);
-			ll.addView(trl);
-			ll = (LinearLayout) this.findViewById(R.id.tab_favorite);
-			tfl = new TabFavoriteList(this);
-			ll.addView(tfl);
-			ll = (LinearLayout) this.findViewById(R.id.tab_online);
-			ll.addView(new TabOnlineWelcome(this));
+			addIntoContentContainer(mBrowseContainer, tbl);
 
-			mTabHost.setOnTabChangedListener(new OnTabChangeListener() {
-				@Override
-				public void onTabChanged(String tabId) {
-					if ("browse".equals(tabId)) {
-						// 切回浏览 Tab 时尝试刷新（Android13+ 可能刚授权了目录）
-						if (tbl != null) tbl.refreshForCurrentAccessMode();
-					} else if ("recent".equals(tabId)) {
-						if (trl != null) trl.getFileDir();
-					} else if ("favorite".equals(tabId)) {
-						if (tfl != null) tfl.getFileDir();
-					}
+			trl = new TabRecentList(this);
+			addIntoContentContainer(mRecentContainer, trl);
+
+			tfl = new TabFavoriteList(this);
+			addIntoContentContainer(mFavoriteContainer, tfl);
+
+			View onlineWelcome = new TabOnlineWelcome(this);
+			addIntoContentContainer(mOnlineContainer, onlineWelcome);
+
+			// ==================== 绑定底部 Tab 点击事件 ====================
+			for (int i = 0; i < 5; i++) {
+				final int pos = i;
+				if (mTabBtns[i] != null) {
+					mTabBtns[i].setOnClickListener(v -> onTabClicked(pos));
 				}
-			});
+			}
+
+			// ==================== 切换到默认 Tab (BROWSE) ====================
+			selectTab(TAB_BROWSE, false);
 
 			// 后台加载音符资源（耗时）
 			LoadThread load = new LoadThread();
@@ -153,6 +167,202 @@ public class PianoShelfActivity extends AppCompatActivity {
 			e.printStackTrace();
 		}
 	}
+
+	// ======================================================================
+	// 底部 Tab 容器 + 点击逻辑
+	// ======================================================================
+
+	/**
+	 * 每个内容 Tab 容器结构：
+	 *   LinearLayout vertical (MATCH_PARENT, id 动态生成)
+	 *     ├─ header (HyperOS 大标题区域，可选)
+	 *     │     LinearLayout horizontal MATCH_PARENT wrap_content
+	 *     │       ├─ 音乐 note icon (24dp，可选，无图标时仅显示文字)
+	 *     │       └─ LinearLayout vertical
+	 *     │            ├─ TextView 大标题 "便携乐谱" (28sp bold)
+	 *     │            └─ TextView 副标题 (14sp gray)
+	 *     └─ FrameLayout (0dp weight=1) ← TabXxxList 会被 add 到这里
+	 */
+	private FrameLayout createTabContentWithHeader(int subtitleResId, boolean showBigTitle) {
+		// 外层 FrameLayout（切换用容器）
+		FrameLayout outer = new FrameLayout(this);
+		outer.setLayoutParams(newFrameParams());
+
+		// 内部 vertical linear：标题 + 内容
+		LinearLayout inner = new LinearLayout(this);
+		inner.setOrientation(LinearLayout.VERTICAL);
+		FrameLayout.LayoutParams innerLp = newFrameParams();
+		innerLp.leftMargin = dp(20);
+		innerLp.rightMargin = dp(20);
+		innerLp.topMargin = dp(20);
+		inner.setLayoutParams(innerLp);
+
+		// -------- Header --------
+		LinearLayout header = new LinearLayout(this);
+		header.setOrientation(LinearLayout.VERTICAL);
+		LinearLayout.LayoutParams headerLp = new LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+		headerLp.bottomMargin = dp(16);
+		header.setLayoutParams(headerLp);
+
+		if (showBigTitle) {
+			TextView bigTitle = new TextView(this);
+			bigTitle.setText(R.string.home_big_title);
+			bigTitle.setTextSize(32);
+			bigTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+			bigTitle.setTextColor(0xFF212121); // hyperos_text_primary
+			header.addView(bigTitle, new LinearLayout.LayoutParams(
+					LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+			// 副标题 + 小下划线（HyperOS 风格）
+			LinearLayout subWrap = new LinearLayout(this);
+			subWrap.setOrientation(LinearLayout.VERTICAL);
+			LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+					LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+			subLp.topMargin = dp(4);
+			subWrap.setLayoutParams(subLp);
+
+			TextView sub = new TextView(this);
+			sub.setText(subtitleResId);
+			sub.setTextSize(15);
+			sub.setTextColor(0xFF757575); // hyperos_text_secondary
+			subWrap.addView(sub, new LinearLayout.LayoutParams(
+					LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+			View underline = new View(this);
+			LinearLayout.LayoutParams ulLp = new LinearLayout.LayoutParams(dp(40), dp(3));
+			ulLp.topMargin = dp(6);
+			underline.setLayoutParams(ulLp);
+			underline.setBackgroundColor(0xFF5C6BC0); // hyperos_primary
+			subWrap.addView(underline);
+
+			header.addView(subWrap);
+		}
+		inner.addView(header);
+
+		// -------- 内容区：FrameLayout (用 id 标识，addView 时好找) --------
+		FrameLayout contentSlot = new FrameLayout(this);
+		contentSlot.setId(View.generateViewId());
+		contentSlot.setTag("content_slot");
+		LinearLayout.LayoutParams slotLp = new LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
+		contentSlot.setLayoutParams(slotLp);
+		inner.addView(contentSlot);
+
+		outer.addView(inner);
+		return outer;
+	}
+
+	/** 把 TabXxxList 或其他 View 塞进对应 FrameLayout container 的 content slot 里 */
+	private void addIntoContentContainer(FrameLayout container, View child) {
+		View inner = container.getChildAt(0); // LinearLayout(header + slot)
+		if (inner instanceof ViewGroup) {
+			ViewGroup innerVg = (ViewGroup) inner;
+			for (int i = 0; i < innerVg.getChildCount(); i++) {
+				View v = innerVg.getChildAt(i);
+				if ("content_slot".equals(v.getTag())) {
+					FrameLayout slot = (FrameLayout) v;
+					slot.addView(child, new FrameLayout.LayoutParams(
+							FrameLayout.LayoutParams.MATCH_PARENT,
+							FrameLayout.LayoutParams.MATCH_PARENT));
+					return;
+				}
+			}
+		}
+	}
+
+	private FrameLayout.LayoutParams newFrameParams() {
+		return new FrameLayout.LayoutParams(
+				FrameLayout.LayoutParams.MATCH_PARENT,
+				FrameLayout.LayoutParams.MATCH_PARENT);
+	}
+
+	private int dp(int value) {
+		float d = getResources().getDisplayMetrics().density;
+		return (int) (value * d + 0.5f);
+	}
+
+	/** 点击底部 Tab 触发 */
+	private void onTabClicked(int pos) {
+		if (pos == TAB_SETTINGS) {
+			// 设置 Tab：不切换内容，直接启动 Settings Activity（并保持视觉高亮一下）
+			Intent intent = new Intent();
+			intent.setClass(this, AppPreferenceActivity.class);
+			startActivity(intent);
+			// Settings 虽然是新 Activity，但回到主界面时保持选中态让用户一致
+			postRefreshSettingsPillHighlight();
+			return;
+		}
+		selectTab(pos, true);
+	}
+
+	/** onResume 后刷新设置按钮的药丸高亮（因为当前内容不是设置页，所以切回 BROWSE） */
+	private void postRefreshSettingsPillHighlight() {
+		// 当用户从 Settings 返回时，onResume 会重新选中当前 Tab，无需额外处理
+	}
+
+	@Override
+	protected void onResume() {
+		super.onResume();
+		// 从设置/其他页回来时，重新应用当前 Tab 的药丸高亮状态
+		applyPillCheckedState(mCurrentTab);
+		// 切回浏览页 / 最近 / 收藏时刷新
+		if (mCurrentTab == TAB_BROWSE && tbl != null) tbl.refreshForCurrentAccessMode();
+		if (mCurrentTab == TAB_RECENT && trl != null) trl.getFileDir();
+		if (mCurrentTab == TAB_FAVORITE && tfl != null) tfl.getFileDir();
+	}
+
+	/**
+	 * 切换 Tab（HyperOS 药丸高亮 + 内容区显隐）
+	 * @param pos Tab 序号 0..3（BROWSE/RECENT/ONLINE/FAVORITE）
+	 * @param animate 是否使用过渡动画（这里直接淡入淡出即可）
+	 */
+	private void selectTab(int pos, boolean animate) {
+		if (pos < 0 || pos > 3) return; // 设置 Tab 不走这里
+		mCurrentTab = pos;
+
+		// 1. 内容区：只有当前 Tab 的容器 VISIBLE，其余 GONE
+		setVisibilityOrGone(mBrowseContainer,   pos == TAB_BROWSE);
+		setVisibilityOrGone(mRecentContainer,   pos == TAB_RECENT);
+		setVisibilityOrGone(mOnlineContainer,   pos == TAB_ONLINE);
+		setVisibilityOrGone(mFavoriteContainer, pos == TAB_FAVORITE);
+
+		// 2. HyperOS 药丸高亮：选中 tab_pill.setChecked(true)，其余 false
+		applyPillCheckedState(pos);
+
+		// 3. 切回浏览 Tab 时尝试刷新（Android13+ 可能刚授权了目录）
+		if (pos == TAB_BROWSE && tbl != null) tbl.refreshForCurrentAccessMode();
+		if (pos == TAB_RECENT && trl != null) trl.getFileDir();
+		if (pos == TAB_FAVORITE && tfl != null) tfl.getFileDir();
+	}
+
+	/** 根据当前 Tab 设置药丸的 checked 状态（触发 bottom_nav_item_bg selector） */
+	private void applyPillCheckedState(int activePos) {
+		// 5 个 Tab（含设置）：设置按钮也参与高亮
+		for (int i = 0; i < 5; i++) {
+			if (mTabPills[i] != null) {
+				mTabPills[i].setSelected(i == activePos);
+				mTabPills[i].setActivated(i == activePos);
+				mTabPills[i].setPressed(false);
+				// 自定义一个"选中"的状态
+				mTabPills[i].setEnabled(true);
+				// 由于 selector 用的是 state_checked，手动设置 isChecked 并不存在，
+				// 我们直接用 setSelected(true) 配合修改过的 selector
+			}
+			if (mTabBtns[i] != null) {
+				mTabBtns[i].setSelected(i == activePos);
+			}
+		}
+	}
+
+	private void setVisibilityOrGone(View v, boolean visible) {
+		if (v == null) return;
+		v.setVisibility(visible ? View.VISIBLE : View.GONE);
+	}
+
+	// ======================================================================
+	// 系统选择器 & 权限
+	// ======================================================================
 
 	/**
 	 * 被 TabBrowseList 调起：打开系统 SAF 文件选择器。
@@ -210,17 +420,16 @@ public class PianoShelfActivity extends AppCompatActivity {
 		try {
 			if (requestCode == REQ_OPEN_MUSICXML_TREE
 					&& Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-				// 持久化该目录授权，下次进入 app 还能继续访问
+				// 持久化该目录授权
 				int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION
 						| Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 				try {
 					getContentResolver().takePersistableUriPermission(uri, takeFlags);
-				} catch (Throwable ignored) { /* 某些 ROM 不支持 persistable */ }
+				} catch (Throwable ignored) {}
 				if (tbl != null) tbl.bindToDocumentTree(uri);
 				return;
 			}
 			if (requestCode == REQ_OPEN_MUSICXML_FILE) {
-				// 单文件：立即转成本地缓存 File 并打开
 				String openedPath = SafeFileResolver.materializeToCacheFile(this, uri);
 				if (openedPath == null) {
 					Toast.makeText(this, R.string.info_open_err, Toast.LENGTH_LONG).show();
@@ -264,9 +473,6 @@ public class PianoShelfActivity extends AppCompatActivity {
 	// MANAGE_EXTERNAL_STORAGE (Android 11+ 根目录访问)
 	// -------------------------------------------------------------------
 
-	/**
-	 * 检查是否已获得"所有文件访问权限"
-	 */
 	@SuppressWarnings("deprecation")
 	public boolean isExternalStorageManager() {
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false;
@@ -279,35 +485,23 @@ public class PianoShelfActivity extends AppCompatActivity {
 
 	/**
 	 * 适配 HyperOS 3 / MIUI 状态栏高度。
-	 *
-	 * 小米 HyperOS 3 基于 Android 14/15，WindowInsets 在某些主题下
-	 * 无法正确穿透到 TabHost/FrameLayout 内部。这里手动获取状态栏高度
-	 * 并通过 ViewCompat.setOnApplyWindowInsetsListener + 资源兜底方案
-	 * 保证内容不被状态栏遮挡。
 	 */
 	private void applyStatusBarInsets() {
 		View rootView = findViewById(android.R.id.content);
 		if (rootView == null) return;
 
-		// 方案 1：使用 WindowInsetsCompat（AndroidX）动态获取状态栏高度
+		// 动态监听 WindowInsets
 		ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, insets) -> {
 			int statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
-			if (statusBarHeight > 0) {
-				applyTopPadding(statusBarHeight);
-			}
+			if (statusBarHeight > 0) applyTopPadding(statusBarHeight);
 			return insets;
 		});
 
-		// 方案 2：同步兜底 —— 直接从系统资源读取状态栏高度
-		// 部分 HyperOS 版本在 onCreate 时还没有 dispatch insets，
-		// 所以我们用资源值作为初始 padding，确保至少不会遮挡
+		// 同步兜底：系统资源读取
 		int statusBarHeight = getStatusBarHeight();
-		if (statusBarHeight > 0) {
-			applyTopPadding(statusBarHeight);
-		}
+		if (statusBarHeight > 0) applyTopPadding(statusBarHeight);
 	}
 
-	/** 从系统 dimen 资源获取状态栏高度（兜底方案） */
 	private int getStatusBarHeight() {
 		int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
 		if (resourceId > 0) {
@@ -315,27 +509,19 @@ public class PianoShelfActivity extends AppCompatActivity {
 				return getResources().getDimensionPixelSize(resourceId);
 			} catch (Throwable ignore) {}
 		}
-		// 默认值：24dp，适配大多数设备
 		float density = getResources().getDisplayMetrics().density;
 		return (int) (24 * density + 0.5f);
 	}
 
-	/** 给根内容容器设置顶部 padding，避免状态栏遮挡 */
 	private void applyTopPadding(int top) {
 		ViewGroup contentRoot = findViewById(android.R.id.content);
 		if (contentRoot != null && contentRoot.getChildCount() > 0) {
-			// setInflate() 后 contentRoot 的第一个子 View 就是 main.xml 的根 LinearLayout
-			// 直接给它加顶部 padding 即可避免状态栏遮挡
 			View mainRoot = contentRoot.getChildAt(0);
 			mainRoot.setPadding(mainRoot.getPaddingLeft(), top,
 					mainRoot.getPaddingRight(), mainRoot.getPaddingBottom());
 		}
 	}
 
-	/**
-	 * 跳转到系统设置页面请求"所有文件访问权限"
-	 * 用户在系统设置里勾选后，会自动回到本 Activity
-	 */
 	public void requestManageExternalStorage() {
 		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return;
 		try {
@@ -343,7 +529,6 @@ public class PianoShelfActivity extends AppCompatActivity {
 			intent.setData(Uri.parse("package:" + getPackageName()));
 			startActivityForResult(intent, REQ_MANAGE_ALL_FILES);
 		} catch (Throwable t) {
-			// 部分 ROM 不支持 ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION，降级到通用页
 			try {
 				Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
 				startActivityForResult(intent, REQ_MANAGE_ALL_FILES);
@@ -360,31 +545,18 @@ public class PianoShelfActivity extends AppCompatActivity {
 		}
 	}
 
+	/**
+	 * UI 重构后不再显示 Options Menu（去除标题栏和三点菜单、设置做成底部 Tab）
+	 * 保持方法空实现即可（避免子类意外继承引发问题）。
+	 */
 	@Override
-	public boolean onCreateOptionsMenu(Menu menu) {
-		int group1 = 1;
-		menu.add(group1, 1, 1, getString(R.string.menu_online_score));
-		menu.add(group1, 2, 2, getString(R.string.menu_setting));
-		menu.add(group1, 3, 3, getString(R.string.menu_exit));
-		return true;
+	public boolean onCreateOptionsMenu(android.view.Menu menu) {
+		return false; // 彻底不显示任何菜单
 	}
 
 	@Override
-	public boolean onOptionsItemSelected(MenuItem item) {
-		switch (item.getItemId()) {
-			case 1:
-				startActivity(new Intent(this, OnlineScoreActivity.class));
-				break;
-			case 2:
-				Intent intent = new Intent();
-				intent.setClass(this, AppPreferenceActivity.class);
-				startActivity(intent);
-				break;
-			case 3:
-				finishAffinity();
-				break;
-		}
-		return true;
+	public boolean onOptionsItemSelected(android.view.MenuItem item) {
+		return false;
 	}
 
 	@Override
@@ -397,22 +569,14 @@ public class PianoShelfActivity extends AppCompatActivity {
 		super.onDestroy();
 	}
 
-	// -------------------------------------------------------------------
-	// Scoped Storage 辅助小工具（静态内聚在入口 Activity，便于全局重用）
-	// -------------------------------------------------------------------
+	// =====================================================================
+	// 以下不变：MediaStore 零权限聚合、URI 归一化等工具方法
+	// =====================================================================
 
-	/**
-	 * Android 11+ 下可零权限从 MediaStore.Files 表拉所有 .xml/.mxl 条目，
-	 * 作为「浏览乐谱」Tab 的 header 提示列表 / 初始内容填充。
-	 *
-	 * 说明：MediaStore 索引的是 "所有 app 写入过的公共媒体文件"，所以只要
-	 * 用户曾经用微信/QQ/浏览器/系统文件管理器把 .xml 保存到
-	 * Download/Documents/Music/...，这里都会被收录。
-	 */
 	public static final class MediaStoreMusicXmlEntry {
 		public final String displayName;
-		public final String absolutePath;   // _data；可能在 Scoped Storage 下为空或不可访问（此时用 openInputStream）
-		public final long   id;             // MediaStore row id
+		public final String absolutePath;
+		public final long   id;
 		public final long   size;
 		public MediaStoreMusicXmlEntry(String displayName, String absolutePath, long id, long size) {
 			this.displayName = displayName; this.absolutePath = absolutePath;
@@ -438,7 +602,6 @@ public class PianoShelfActivity extends AppCompatActivity {
 					MediaStore.Files.FileColumns.SIZE,
 					MediaStore.Files.FileColumns.MIME_TYPE
 			};
-			// 用 LIKE 过滤扩展名比 MIME 更稳，因为很多浏览器下载下来的 .xml 并没有正确 mime
 			String sel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 					? MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE ? OR "
 					+ MediaStore.Files.FileColumns.DISPLAY_NAME + " LIKE ? OR "
@@ -475,21 +638,10 @@ public class PianoShelfActivity extends AppCompatActivity {
 				}
 			});
 		} catch (Throwable ignore) {
-			// 厂商定制 MediaStore 列名异常时直接降级：返回空列表，header 会提示用户用系统选择器
 		}
 		return out;
 	}
 
-	/**
-	 * 把任意 content:// / file:// / http(s):// URI 材料化为 app cache 里一份本地可读 File。
-	 *
-	 * 原 GraphicsActivity 写死为 "new File(new URI(intent.getDataString()))"，这在遇到
-	 * content:// 或 URL encoded SAF 路径时一定失败（IllegalArgumentException or
-	 * FileNotFoundException），所以我们在两处入口 (SAF & GraphicsActivity) 统一先走
-	 * 这里做一次"稳定的本地路径归一化"。
-	 *
-	 * @return 本地绝对路径；失败返回 null。
-	 */
 	public static File materializeUriToCacheFileSafe(@NonNull Context ctx, @NonNull Uri src) {
 		try {
 			String path = SafeFileResolver.materializeToCacheFile(ctx, src);
@@ -499,10 +651,6 @@ public class PianoShelfActivity extends AppCompatActivity {
 		}
 	}
 
-	/**
-	 * @return 当前外部存储根路径（旧版本用）；Scoped Storage 下依旧可返回，
-	 *         只是 TabBrowseList 需要意识到这个目录可能 listFiles() 为空。
-	 */
 	@SuppressWarnings("deprecation")
 	public static File getPrimaryExternalRootCompat() {
 		try {

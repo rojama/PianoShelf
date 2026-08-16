@@ -11,6 +11,22 @@
     <string name="tab_recent">Recent</string>
     <string name="tab_favorite">Favorites</string>
     <string name="tab_online">Online</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Short tab names for bottom nav pill (must be compact) -->
+    <string name="tab_browse_short">Browse</string>
+    <string name="tab_recent_short">Recent</string>
+    <string name="tab_online_short">Online</string>
+    <string name="tab_favorite_short">Fav</string>
+    <string name="tab_settings_short">Settings</string>
+
+    <!-- Large title displayed on each tab's content top (HyperOS style big title) -->
+    <string name="home_big_title">PianoShelf</string>
+    <string name="browse_section_subtitle">Browse Scores</string>
+    <string name="recent_section_subtitle">Recently Opened</string>
+    <string name="online_section_subtitle">Online Scores</string>
+    <string name="favorite_section_subtitle">Favorites</string>
+    <string name="settings_section_subtitle">Settings</string>
 
     <string name="info_add_favorite">Added to favorites</string>
     <string name="info_remove_favorite">Removed from favorites</string>
