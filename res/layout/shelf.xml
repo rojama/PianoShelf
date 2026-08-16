@@ -36,32 +36,81 @@
 		android:padding="4dp"
 		android:text="准备中… 0%"/>
 
-	<!-- 调试日志面板：ScrollView + 等宽 TextView，默认 0.33 屏高，用户可以滚动查看。出错时自动切到可见。 -->
+	<!-- 调试日志面板：ScrollView + 等宽 TextView，默认显示于底部，有显式关闭/展开按钮。
+	     交互：
+	       - 点击 × ：隐藏面板
+	       - 点击 ⤢ ：在 半高(≈35%屏) / 全屏 之间切换
+	       - 点击标题栏空白：折叠为仅标题（1行，再点一次恢复）
+	       - 物理返回键（Back）：若展开中 → 先隐藏面板；面板隐藏时 → 正常退出 Activity
+	-->
 	<LinearLayout
 		android:id="@+id/debug_log_panel"
 		android:layout_width="match_parent"
 		android:layout_height="wrap_content"
-		android:maxHeight="280dp"
+		android:maxHeight="10000dp"
 		android:orientation="vertical"
-		android:background="#FAFAFA"
+		android:background="#263238"
 		android:layout_alignParentBottom="true"
+		android:elevation="8dp"
 		android:visibility="visible">
 
-		<TextView
+		<LinearLayout
+			android:id="@+id/log_title_bar"
 			android:layout_width="match_parent"
 			android:layout_height="wrap_content"
-			android:padding="4dp"
-			android:text="调试日志（可上下滚动查看，点击手机菜单按钮播放/暂停/翻页）"
-			android:textColor="#FFFFFF"
-			android:background="#263238"
-			android:textSize="11sp"/>
+			android:orientation="horizontal"
+			android:gravity="center_vertical"
+			android:background="#1A2327"
+			android:paddingStart="8dp"
+			android:paddingEnd="4dp"
+			android:paddingTop="2dp"
+			android:paddingBottom="2dp">
+
+			<TextView
+				android:id="@+id/log_title"
+				android:layout_width="0dp"
+				android:layout_height="wrap_content"
+				android:layout_weight="1"
+				android:padding="4dp"
+				android:text="调试日志（可上下滚动，点击进度文字或按返回键可关闭）"
+				android:textColor="#FFFFFF"
+				android:textSize="11sp"/>
+
+			<TextView
+				android:id="@+id/btn_log_toggle"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="⤢"
+				android:textColor="#80DEEA"
+				android:textSize="18sp"
+				android:paddingStart="8dp"
+				android:paddingEnd="8dp"
+				android:paddingTop="4dp"
+				android:paddingBottom="4dp"
+				android:background="?attr/selectableItemBackgroundBorderless"
+				android:contentDescription="切换面板大小"/>
+
+			<TextView
+				android:id="@+id/btn_log_close"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:text="×"
+				android:textColor="#EF9A9A"
+				android:textSize="26sp"
+				android:paddingStart="12dp"
+				android:paddingEnd="12dp"
+				android:paddingTop="0dp"
+				android:paddingBottom="4dp"
+				android:background="?attr/selectableItemBackgroundBorderless"
+				android:contentDescription="关闭日志面板"/>
+		</LinearLayout>
 
 		<ScrollView
 			android:id="@+id/logScroll"
 			android:layout_width="match_parent"
-			android:layout_height="match_parent"
+			android:layout_height="wrap_content"
 			android:minHeight="160dp"
-			android:maxHeight="240dp"
+			android:maxHeight="280dp"
 			android:background="#263238"
 			android:scrollbars="vertical"
 			android:fillViewport="true">

@@ -9,6 +9,7 @@ import android.graphics.Bitmap;
 import android.graphics.Matrix;
 import android.graphics.PointF;
 
+import com.rojama.pianoshelf.DebugLog;
 import com.rojama.pianoshelf.Note;
 import com.rojama.pianoshelf.PaintTransfer;
 import com.xenoage.pdlib.PVector;
@@ -362,6 +363,16 @@ public final class MxlNote implements MxlMusicDataContent {
 				stemPosition = this.getStem().getYPosition();
 			}
 
+			// ====== 1) 先决定 staff 编号（默认 1，为 null 时兜底） ======
+			Integer staffNum = this.getStaff();
+			int staff = (staffNum == null) ? 1 : staffNum.intValue();
+
+			// ====== 2) 若这个 staff 没有谱号，默认给一个 G（nowClefType 为空是首个 measure 还没遇到 attributes/clef 时最常见的崩点） ======
+			if (!pt.nowClefType.containsKey(Integer.valueOf(staff))) {
+				DebugLog.w("MxlNote", "  staff=" + staff + " 无 clef 记录，兜底 ClefType.G（nowClefType.keys=" + pt.nowClefType.keySet() + "）");
+				pt.nowClefType.put(Integer.valueOf(staff), com.xenoage.zong.core.music.clef.ClefType.G);
+			}
+
 			Symbol symbol = null;
 			switch (this.getContent().getFullNote().getContent().getFullNoteContentType()) {
 			// 音符
@@ -382,13 +393,26 @@ public final class MxlNote implements MxlMusicDataContent {
 				case WHOLE:
 					symbol = pt.ct.symbolPool.getSymbol(CommonSymbol.NoteWhole);
 					break;
+				default:
+					symbol = pt.ct.symbolPool.getSymbol(CommonSymbol.NoteQuarter);
+					break;
 				}
-				MxlPitch pitch = (MxlPitch) this.getContent().getFullNote().getContent();
-				int line = pt.nowClefType.get(this.getStaff())
-						.computeLinePosition(pitch.getPitch());
-				pt.oldY = 4 * 10 - line * 10 / 2;
-				pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + pt.oldY
-						- symbol.getTopToBase() + 1);
+				if (symbol == null) {
+					DebugLog.w("MxlNote", "  note head symbol 为 null，跳过此 note（type=" + this.getType().type + "）");
+					break;
+				}
+				{
+					MxlPitch pitch = (MxlPitch) this.getContent().getFullNote().getContent();
+					com.xenoage.zong.core.music.clef.ClefType ct = pt.nowClefType.get(Integer.valueOf(staff));
+					if (ct == null || pitch == null || pitch.getPitch() == null) {
+						DebugLog.w("MxlNote", "  clef/pitch 缺一项，跳过绘制: clef=" + ct + " pitchObj=" + pitch + " getPitch()=" + (pitch == null ? "null" : pitch.getPitch()));
+						pt.oldX += symbol.getBitmap().getWidth() + pt.ct.SPACE;
+						break;
+					}
+					int line = ct.computeLinePosition(pitch.getPitch());
+					pt.oldY = 4 * 10 - line * 10 / 2;
+					pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + pt.oldY
+							- symbol.getTopToBase() + 1);
 				
 				
 				

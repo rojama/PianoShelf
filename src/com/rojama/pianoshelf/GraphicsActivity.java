@@ -13,10 +13,14 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
+import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -100,6 +104,22 @@ public class GraphicsActivity extends AppCompatActivity {
 		}
 	}
 
+	/** 面板高度/折叠模式 */
+	private enum LogPanelMode {
+		/** 完全隐藏 */
+		HIDDEN,
+		/** 底部半高（默认 280dp max） */
+		HALF,
+		/** 全屏覆盖 */
+		FULL
+	}
+	private LogPanelMode logMode = LogPanelMode.HALF;
+	/** 切换全屏时记住上次半高的 maxHeight，便于还原 */
+	private int logHalfMaxPx = 0;
+	/** ScrollView 的 maxHeight 属性需要通过 LayoutParams 动态控制，所以这里存个引用 */
+	private ScrollView logScrollRef = null;
+	private View logPanelRef = null;
+
 	/** 把 GraphicsView 绑定到 UI 控件这件事独立出来：即使还没 filepath 也要先让日志面板跑起来。 */
 	private void ensureUIBound() {
 		try {
@@ -111,6 +131,10 @@ public class GraphicsActivity extends AppCompatActivity {
 				graphicsView.screenWidth = dm.widthPixels;
 				graphicsView.screenHeight = dm.heightPixels;
 			}
+			logPanelRef = findViewById(R.id.debug_log_panel);
+			logScrollRef = findViewById(R.id.logScroll);
+			logHalfMaxPx = Math.round(280 * getResources().getDisplayMetrics().density);
+
 			// 点击进度文字：切换日志面板可见 / 隐藏
 			View pt = findViewById(R.id.progressText);
 			if (pt != null) {
@@ -119,9 +143,11 @@ public class GraphicsActivity extends AppCompatActivity {
 					if (panel == null) return;
 					if (panel.getVisibility() == View.VISIBLE) {
 						panel.setVisibility(View.GONE);
+						logMode = LogPanelMode.HIDDEN;
 						DebugLog.i(TAG, "用户点击进度文字：隐藏日志面板");
 					} else {
 						panel.setVisibility(View.VISIBLE);
+						applyLogMode(LogPanelMode.HALF);
 						DebugLog.i(TAG, "用户点击进度文字：显示日志面板");
 						// 切到 VISIBLE 后让日志面板滚到底
 						final android.widget.ScrollView sv = findViewById(R.id.logScroll);
@@ -129,9 +155,166 @@ public class GraphicsActivity extends AppCompatActivity {
 					}
 				});
 			}
+
+			// 关闭按钮
+			View closeBtn = findViewById(R.id.btn_log_close);
+			if (closeBtn != null) {
+				closeBtn.setOnClickListener(v -> {
+					View panel = findViewById(R.id.debug_log_panel);
+					if (panel == null) return;
+					panel.setVisibility(View.GONE);
+					logMode = LogPanelMode.HIDDEN;
+					DebugLog.i(TAG, "用户点击 × ：关闭日志面板");
+				});
+			}
+
+			// 展开/全屏切换按钮（⤢）：循环 HALF → FULL → HALF
+			View toggleBtn = findViewById(R.id.btn_log_toggle);
+			if (toggleBtn != null) {
+				toggleBtn.setOnClickListener(v -> {
+					View panel = findViewById(R.id.debug_log_panel);
+					if (panel == null) return;
+					if (panel.getVisibility() != View.VISIBLE) {
+						panel.setVisibility(View.VISIBLE);
+						applyLogMode(LogPanelMode.HALF);
+						return;
+					}
+					if (logMode == LogPanelMode.FULL) {
+						applyLogMode(LogPanelMode.HALF);
+						DebugLog.i(TAG, "用户点击 ⤢ ：面板切回半高");
+					} else {
+						applyLogMode(LogPanelMode.FULL);
+						DebugLog.i(TAG, "用户点击 ⤢ ：面板切到全屏");
+					}
+				});
+			}
+
+			// 点击标题栏（非按钮区域）：折叠仅显示标题
+			View titleBar = findViewById(R.id.log_title_bar);
+			View titleTv = findViewById(R.id.log_title);
+			if (titleBar != null && logScrollRef != null) {
+				titleBar.setOnClickListener(v -> {
+					if (logScrollRef.getVisibility() == View.GONE) {
+						logScrollRef.setVisibility(View.VISIBLE);
+						applyLogMode(logMode == LogPanelMode.FULL ? LogPanelMode.FULL : LogPanelMode.HALF);
+						DebugLog.i(TAG, "用户点击标题栏：展开日志内容区");
+					} else {
+						logScrollRef.setVisibility(View.GONE);
+						DebugLog.i(TAG, "用户点击标题栏：折叠日志内容区（仅留标题）");
+					}
+				});
+				// 标题 TextView 也派发点击（防止权重=1的区域不响应）
+				if (titleTv != null) titleTv.setOnClickListener(v -> titleBar.callOnClick());
+			}
 		} catch (Throwable t) {
 			DebugLog.e(TAG, "ensureUIBound 异常（面板可能未生效）", t);
 		}
+	}
+
+	/**
+	 * 把调试日志面板调整到指定模式：
+	 *  - HIDDEN：隐藏（visibility=GONE）
+	 *  - HALF：ScrollView maxHeight=280dp，面板高度=wrap_content，底部对齐
+	 *  - FULL：ScrollView 无 maxHeight，面板 MATCH_PARENT，覆盖整屏并防止穿透到下面的乐谱
+	 */
+	private void applyLogMode(LogPanelMode target) {
+		logMode = target;
+		if (logPanelRef == null) logPanelRef = findViewById(R.id.debug_log_panel);
+		if (logScrollRef == null) logScrollRef = findViewById(R.id.logScroll);
+		if (logPanelRef == null) return;
+		ViewGroup.LayoutParams lp = logPanelRef.getLayoutParams();
+		switch (target) {
+			case HIDDEN:
+				logPanelRef.setVisibility(View.GONE);
+				break;
+			case HALF:
+				logPanelRef.setVisibility(View.VISIBLE);
+				if (lp != null) {
+					lp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+					lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+					logPanelRef.setLayoutParams(lp);
+				}
+				logPanelRef.setClickable(false); // 半高时不拦截点击（底部以上仍可操作乐谱）
+				if (logScrollRef != null) {
+					ViewGroup.LayoutParams slp = logScrollRef.getLayoutParams();
+					if (slp != null) {
+						slp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+						logScrollRef.setLayoutParams(slp);
+					}
+					logScrollRef.setMaxHeight(logHalfMaxPx > 0 ? logHalfMaxPx : Math.round(280 * getResources().getDisplayMetrics().density));
+					logScrollRef.setVisibility(View.VISIBLE);
+				}
+				break;
+			case FULL:
+				logPanelRef.setVisibility(View.VISIBLE);
+				DisplayMetrics dm2 = getResources().getDisplayMetrics();
+				if (lp != null) {
+					lp.height = ViewGroup.LayoutParams.MATCH_PARENT;
+					lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+					logPanelRef.setLayoutParams(lp);
+				}
+				logPanelRef.setClickable(true); // 全屏时吃掉所有点击，避免误触下方乐谱
+				if (logScrollRef != null) {
+					ViewGroup.LayoutParams slp = logScrollRef.getLayoutParams();
+					if (slp != null) {
+						slp.height = 0;
+						// layout_weight=1 效果用 LinearLayout.LayoutParams 实现
+						if (slp instanceof LinearLayout.LayoutParams) {
+							((LinearLayout.LayoutParams) slp).weight = 1f;
+						}
+						logScrollRef.setLayoutParams(slp);
+					}
+					logScrollRef.setMaxHeight(dm2.heightPixels * 2); // 基本取消上限
+					logScrollRef.setVisibility(View.VISIBLE);
+				}
+				break;
+		}
+		final ScrollView sv = findViewById(R.id.logScroll);
+		if (sv != null) sv.post(() -> sv.fullScroll(View.FOCUS_DOWN));
+	}
+
+	/**
+	 * 物理返回键：按用户的真实使用顺序：
+	 *   - 若面板是 FULL → 先退回 HALF（用户最常用）
+	 *   - 若面板是 HALF/可见 → 先隐藏面板
+	 *   - 面板已隐藏 → 交给系统正常 finish Activity
+	 */
+	@Override
+	public void onBackPressed() {
+		View panel = findViewById(R.id.debug_log_panel);
+		if (panel != null && panel.getVisibility() == View.VISIBLE) {
+			if (logMode == LogPanelMode.FULL) {
+				applyLogMode(LogPanelMode.HALF);
+				DebugLog.i(TAG, "用户按返回键：面板从全屏切回半高");
+				return;
+			}
+			panel.setVisibility(View.GONE);
+			logMode = LogPanelMode.HIDDEN;
+			DebugLog.i(TAG, "用户按返回键：隐藏日志面板");
+			return;
+		}
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+			// API 34+ 系统推荐回调方式，这里兜底：直接 finish 以免卡住
+			super.onBackPressed();
+		} else {
+			super.onBackPressed();
+		}
+	}
+
+	/** 兼容：老设备 KeyEvent.KEYCODE_BACK 也走同一套逻辑 */
+	@Override
+	public boolean onKeyDown(int keyCode, KeyEvent event) {
+		if (keyCode == KeyEvent.KEYCODE_BACK) {
+			View panel = findViewById(R.id.debug_log_panel);
+			if (panel != null && panel.getVisibility() == View.VISIBLE) {
+				// 交给 onBackPressed（生命周期更完整）：手动触发一次
+				try {
+					onBackPressed();
+					return true;
+				} catch (Throwable ignore) { /* 极少数系统在 onKeyDown 禁止递归调用 onBackPressed */ }
+			}
+		}
+		return super.onKeyDown(keyCode, event);
 	}
 
 	private void writeSessionHeader(Intent intent) {
@@ -280,9 +463,11 @@ public class GraphicsActivity extends AppCompatActivity {
 	private void showLogPanel() {
 		View panel = findViewById(R.id.debug_log_panel);
 		if (panel != null && panel.getVisibility() != View.VISIBLE) {
-			panel.setVisibility(View.VISIBLE);
+			applyLogMode(LogPanelMode.HALF);
+			return;
 		}
-		final android.widget.ScrollView sv = findViewById(R.id.logScroll);
+		if (logMode != LogPanelMode.FULL) applyLogMode(LogPanelMode.HALF);
+		final ScrollView sv = findViewById(R.id.logScroll);
 		if (sv != null) sv.post(() -> sv.fullScroll(View.FOCUS_DOWN));
 	}
 

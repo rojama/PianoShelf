@@ -151,11 +151,16 @@ public final class MxlAttributes implements MxlMusicDataContent {
 	public void print(PaintTransfer pt) {				
 		//谱号
 		for (MxlClef clef : this.getClef()) {
+			ClefType ct;
 			if (clef.getSign() == MxlClefSign.G) {
-				pt.nowClefType.put(clef.getNumber(), ClefType.G);				
-			}else if (clef.getSign() == MxlClefSign.F) {
-				pt.nowClefType.put(clef.getNumber(), ClefType.F);	
+				ct = ClefType.G;				
+			} else if (clef.getSign() == MxlClefSign.F) {
+				ct = ClefType.F;	
+			} else {
+				// C / Percussion / TAB / None 一律 fallback 到 G（因为 core.jar 的 ClefType 只有 G/F）
+				ct = ClefType.G;
 			}
+			pt.nowClefType.put(clef.getNumber(), ct);
 		}
 		
 		//音调符号
