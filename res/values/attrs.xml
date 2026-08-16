@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自定义主题属性（由 styles.xml 中 Theme.PianoShelf 赋值，layout 引用） -->
+<resources>
+    <!-- 底部导航图标/文字 tint selector，通过 styles.xml 绑定 -->
+    <attr name="bottomNavIconTint" format="reference"/>
+</resources>

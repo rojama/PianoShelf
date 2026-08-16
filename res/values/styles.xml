@@ -1,34 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    Styles for modernized PianoShelf (AndroidX AppCompat).
-
-    These themes are referenced from AndroidManifest.xml and ensure
-    AppCompat/Material components (ActionBar, Toolbar, Settings) render
-    correctly without "You need to use a Theme.AppCompat" crashes.
--->
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Base application theme. Used by PianoShelfActivity (home screen).
-         Light theme with dark-colored action bar. -->
-    <style name="Theme.PianoShelf" parent="Theme.MaterialComponents.Light.DarkActionBar.Bridge">
-        <item name="colorPrimary">#303F9F</item>
-        <item name="colorPrimaryDark">#1A237E</item>
-        <item name="colorAccent">#FF5252</item>
-        <item name="android:windowBackground">@android:color/white</item>
+    <!-- ================================================================
+         Theme.PianoShelf — HyperOS 3 原生风格主主题
+         - NoActionBar：去掉顶部标题栏，全屏显示内容
+         - 颜色对齐 HyperOS：浅靛蓝主色、极浅灰白背景
+         - 状态栏浅色文字（深色图标）、底部导航栏浅色
+         - MaterialComponents Bridge 保证老版本 Android 兼容
+    ================================================================= -->
+    <style name="Theme.PianoShelf" parent="Theme.MaterialComponents.Light.NoActionBar.Bridge">
+        <!-- HyperOS 调色板 -->
+        <item name="colorPrimary">@color/hyperos_primary</item>
+        <item name="colorPrimaryVariant">@color/hyperos_primary_dark</item>
+        <item name="colorSecondary">@color/hyperos_secondary</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="colorOnSecondary">@android:color/white</item>
+
+        <!-- 背景/表面 -->
+        <item name="android:windowBackground">@color/hyperos_background</item>
+        <item name="android:colorBackground">@color/hyperos_background</item>
+        <item name="android:navigationBarColor">@color/hyperos_bottom_nav_bg</item>
+
+        <!-- 状态栏/导航栏图标：浅色背景配深色图标 -->
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+
+        <!-- 自定义底部导航属性（由 TabItem View 引用） -->
+        <item name="bottomNavIconTint">@color/bottom_nav_icon_color</item>
     </style>
 
-    <!-- Fullscreen variant used by GraphicsActivity.
-         No title bar, no action bar, full screen immersive -->
+    <!-- 乐谱全屏查看（GraphicsActivity）：无ActionBar + 全黑背景 -->
     <style name="Theme.PianoShelf.Fullscreen" parent="Theme.MaterialComponents.NoActionBar.Bridge">
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowContentOverlay">@null</item>
         <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 
-    <!-- Settings screen theme (has visible ActionBar with back button) -->
-    <style name="Theme.PianoShelf.Settings" parent="Theme.MaterialComponents.Light.DarkActionBar.Bridge">
-        <item name="colorPrimary">#303F9F</item>
-        <item name="colorPrimaryDark">#1A237E</item>
-        <item name="colorAccent">#FF5252</item>
+    <!-- 设置页、在线乐谱页：NoActionBar 但保留浅色状态栏 -->
+    <style name="Theme.PianoShelf.Settings" parent="Theme.MaterialComponents.Light.NoActionBar.Bridge">
+        <item name="colorPrimary">@color/hyperos_primary</item>
+        <item name="colorPrimaryVariant">@color/hyperos_primary_dark</item>
+        <item name="colorSecondary">@color/hyperos_secondary</item>
+        <item name="android:windowBackground">@color/hyperos_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

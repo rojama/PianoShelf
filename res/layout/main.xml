@@ -1,27 +1,234 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- ================================================================
+     HyperOS 3 风格主布局
+     结构：
+       root (LinearLayout vertical)
+         ├─ [0] FrameLayout id/content_frame  (内容区，MATCH_PARENT weight=1)
+         │     内部会动态加入 5 个 tab 容器 FrameLayout
+         └─ [1] LinearLayout id/bottom_nav (底部导航栏，height=80dp)
+               ├─ Tab 1：浏览 (left)
+               ├─ Tab 2：最近
+               ├─ Tab 3：在线 (CENTER，中间)
+               ├─ Tab 4：收藏
+               └─ Tab 5：设置 (right)
+================================================================ -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:orientation="vertical"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
-    <TabHost android:id="@android:id/tabhost" android:layout_width="match_parent" android:layout_height="match_parent">
-        <LinearLayout android:id="@+id/linearLayout_main" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical">
-            <TabWidget android:layout_width="match_parent" android:layout_height="wrap_content" android:id="@android:id/tabs"></TabWidget>
-            <FrameLayout android:layout_width="match_parent" android:layout_height="match_parent" android:id="@android:id/tabcontent">
-                <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/tab_browse">
-				    <ListView android:layout_weight="1" android:layout_height="wrap_content" android:id="@+id/listView_browse" android:layout_width="match_parent"></ListView>   
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/tab_recent">
-                    <ListView android:layout_weight="1" android:layout_height="wrap_content" android:id="@+id/listView_recent" android:layout_width="match_parent"></ListView>
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/tab_favorite">
-                    <ListView android:layout_weight="1" android:layout_height="wrap_content" android:id="@+id/listView_favorite" android:layout_width="match_parent"></ListView>
-                </LinearLayout>
-                <!-- Tab 4: 在线乐谱入口容器 -->
-                <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent" android:id="@+id/tab_online"
-                    android:orientation="vertical"
-                    android:gravity="center_horizontal"
-                    android:padding="16dp" />
-            </FrameLayout>
+    android:layout_height="match_parent"
+    android:background="@color/hyperos_background"
+    android:fitsSystemWindows="true">
+
+    <!-- ===================== 内容容器 ===================== -->
+    <FrameLayout
+        android:id="@+id/content_frame"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@color/hyperos_background" />
+
+    <!-- ===================== 底部导航栏 (HyperOS 风格) ===================== -->
+    <LinearLayout
+        android:id="@+id/bottom_nav"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:orientation="horizontal"
+        android:weightSum="5"
+        android:background="@color/hyperos_bottom_nav_bg"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="8dp">
+
+        <!-- ============= Tab 1：浏览乐谱 (pos 0, BROWSE) ============= -->
+        <LinearLayout
+            android:id="@+id/tab_browse_btn"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="top|center_horizontal"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless">
+            <LinearLayout
+                android:id="@+id/tab_browse_pill"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:background="@drawable/bottom_nav_item_bg">
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:scaleType="fitCenter"
+                    android:duplicateParentState="true"
+                    android:tint="@drawable/bottom_nav_icon_color"
+                    android:src="@drawable/ic_tab_browse"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textSize="11sp"
+                    android:duplicateParentState="true"
+                    android:textColor="@drawable/bottom_nav_text_color"
+                    android:text="@string/tab_browse_short"/>
+            </LinearLayout>
         </LinearLayout>
-    </TabHost>
+
+        <!-- ============= Tab 2：最近打开 (pos 1, RECENT) ============= -->
+        <LinearLayout
+            android:id="@+id/tab_recent_btn"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="top|center_horizontal"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless">
+            <LinearLayout
+                android:id="@+id/tab_recent_pill"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:background="@drawable/bottom_nav_item_bg">
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:scaleType="fitCenter"
+                    android:duplicateParentState="true"
+                    android:tint="@drawable/bottom_nav_icon_color"
+                    android:src="@drawable/ic_tab_recent"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textSize="11sp"
+                    android:duplicateParentState="true"
+                    android:textColor="@drawable/bottom_nav_text_color"
+                    android:text="@string/tab_recent_short"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ============= Tab 3：在线乐谱 (pos 2, ONLINE — 中间!) ============= -->
+        <LinearLayout
+            android:id="@+id/tab_online_btn"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="top|center_horizontal"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless">
+            <LinearLayout
+                android:id="@+id/tab_online_pill"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:background="@drawable/bottom_nav_item_bg">
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:scaleType="fitCenter"
+                    android:duplicateParentState="true"
+                    android:tint="@drawable/bottom_nav_icon_color"
+                    android:src="@drawable/ic_tab_online"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textSize="11sp"
+                    android:duplicateParentState="true"
+                    android:textColor="@drawable/bottom_nav_text_color"
+                    android:text="@string/tab_online_short"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ============= Tab 4：收藏夹 (pos 3, FAVORITE) ============= -->
+        <LinearLayout
+            android:id="@+id/tab_favorite_btn"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="top|center_horizontal"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless">
+            <LinearLayout
+                android:id="@+id/tab_favorite_pill"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:background="@drawable/bottom_nav_item_bg">
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:scaleType="fitCenter"
+                    android:duplicateParentState="true"
+                    android:tint="@drawable/bottom_nav_icon_color"
+                    android:src="@drawable/ic_tab_favorite"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textSize="11sp"
+                    android:duplicateParentState="true"
+                    android:textColor="@drawable/bottom_nav_text_color"
+                    android:text="@string/tab_favorite_short"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- ============= Tab 5：设置 (pos 4, SETTINGS — 最右) ============= -->
+        <LinearLayout
+            android:id="@+id/tab_settings_btn"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="top|center_horizontal"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless">
+            <LinearLayout
+                android:id="@+id/tab_settings_pill"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:background="@drawable/bottom_nav_item_bg">
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:scaleType="fitCenter"
+                    android:duplicateParentState="true"
+                    android:tint="@drawable/bottom_nav_icon_color"
+                    android:src="@drawable/ic_tab_settings"/>
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:textSize="11sp"
+                    android:duplicateParentState="true"
+                    android:textColor="@drawable/bottom_nav_text_color"
+                    android:text="@string/tab_settings_short"/>
+            </LinearLayout>
+        </LinearLayout>
+
+    </LinearLayout>
 </LinearLayout>

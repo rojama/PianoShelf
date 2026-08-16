@@ -11,6 +11,22 @@
     <string name="tab_recent">Recent</string>
     <string name="tab_favorite">Favorites</string>
     <string name="tab_online">Online</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Short tab names for bottom nav pill (must be compact) -->
+    <string name="tab_browse_short">Browse</string>
+    <string name="tab_recent_short">Recent</string>
+    <string name="tab_online_short">Online</string>
+    <string name="tab_favorite_short">Fav</string>
+    <string name="tab_settings_short">Settings</string>
+
+    <!-- Large title displayed on each tab's content top (HyperOS style big title) -->
+    <string name="home_big_title">PianoShelf</string>
+    <string name="browse_section_subtitle">Browse Scores</string>
+    <string name="recent_section_subtitle">Recently Opened</string>
+    <string name="online_section_subtitle">Online Scores</string>
+    <string name="favorite_section_subtitle">Favorites</string>
+    <string name="settings_section_subtitle">Settings</string>
 
     <string name="info_add_favorite">Added to favorites</string>
     <string name="info_remove_favorite">Removed from favorites</string>
@@ -18,6 +34,22 @@
     <string name="info_not_exiet">File no longer exists</string>
     <string name="info_open_err">Cannot open file (invalid format or corrupted)</string>
     <string name="info_page_no">Page %d</string>
+    <string name="browse_tab_header_hint">Showing MusicXML files found on this device. On Android 13+ use the file picker below to open a specific .xml/.mxl file.</string>
+    <string name="browse_btn_open_file">Open MusicXML file…</string>
+    <string name="browse_btn_open_dir">Choose folder…</string>
+    <string name="browse_scoped_storage_note">Because of Scoped Storage (Android 11+) the tree view only shows the files this app can see. Use the system picker for the full device.</string>
+    <string name="browse_no_matching_files">No .xml or .mxl MusicXML files were found on this device.</string>
+
+    <!-- Root directory access (MANAGE_EXTERNAL_STORAGE) -->
+    <string name="browse_btn_browse_root">Browse root directory…</string>
+    <string name="browse_btn_continue_root">Continue browsing /storage/emulated/0</string>
+    <string name="browse_root_permission_required">To browse /storage/emulated/0 directly, PianoShelf needs "All files access" permission. Tap below to enable it in system settings.</string>
+    <string name="browse_root_go_settings">Grant permission in Settings</string>
+    <string name="browse_root_permission_granted">All files access granted. Now browsing /storage/emulated/0…</string>
+    <string name="browse_root_permission_denied">Permission not granted. You can still use the system file picker above.</string>
+    <string name="browse_root_browsing">Browsing: %1$s</string>
+    <string name="browse_root_toast_listing">Listing device files…</string>
+    <string name="browse_root_failed">Cannot list directory. Please grant "All files access" permission.</string>
 
     <string name="dis_back_root">Go to root directory</string>
     <string name="dis_back_up">Go up: %s</string>
