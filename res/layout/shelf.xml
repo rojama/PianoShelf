@@ -15,15 +15,13 @@
 		android:layout_alignParentRight="true"
 		android:layout_margin="10dp"/>
 
-	<ProgressBar android:layout_width="wrap_content"
+	<ProgressBar android:layout_width="260dp"
 		android:layout_height="wrap_content" style="?android:attr/progressBarStyleHorizontal"
 		android:id="@+id/progressBar" android:layout_centerHorizontal="true"
 		android:max="100"
 		android:progress="0"
 		android:indeterminate="false"
 		android:layout_marginTop="16dp"
-		android:minWidth="260dp"
-		android:layout_width="260dp"
 		android:layout_alignParentTop="true">
 	</ProgressBar>
 
