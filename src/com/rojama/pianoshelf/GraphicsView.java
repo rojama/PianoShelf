@@ -247,7 +247,10 @@ public class GraphicsView {
 			postProgress(ST_SYM, "加载 SymbolPool (字体符号)");
 			ct.context = context;
 			ct.symbolPool = SymbolPool.loadDefault(ct.context);
-			DebugLog.d(TAG, "SymbolPool.loadDefault 完成");
+			if (ct.symbolPool == null) {
+				throw new RuntimeException("SymbolPool.loadDefault 返回 null，无法加载乐谱符号资源，请检查 logcat 中 SymbolPool 的错误日志");
+			}
+			DebugLog.d(TAG, "SymbolPool.loadDefault 完成，symbols=" + (ct.symbolPool.getSymbolCount()));
 			postProgress(ST_SCR, "创建画布 bitmap " + screenWidth + "x" + screenHeight);
 			ct.setScreen(screenWidth, screenHeight);
 			Paint paint = new Paint();

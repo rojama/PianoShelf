@@ -45,7 +45,10 @@ public class SymbolPool {
 	public static SymbolPool load(String id, Context context) {
 		try {
 			return new SymbolPool(id, context);
-		} catch (Exception ex) {
+		} catch (Throwable ex) {
+			// 捕获所有 Throwable（包括 Error），防止资源加载失败时返回 null 而不留下任何线索
+			DebugLog.e(TAG, "SymbolPool.load(\"" + id + "\") 加载失败", ex);
+			ex.printStackTrace();
 		}
 
 		return null;
@@ -78,12 +81,23 @@ public class SymbolPool {
 		DebugLog.d(TAG, "SymbolPool 构造 id=" + id + " 开始加载资源");
 
 		Resources res = context.getResources();
-		int xmlIndex = R.xml.tex_default;
-		int pngIndex = R.drawable.tex_default;
-		if (id.equals("default")) {
-			xmlIndex = R.xml.tex_default;
-			pngIndex = R.drawable.tex_default;
-		}
+			int xmlIndex = R.xml.tex_default;
+			int pngIndex = R.drawable.tex_default;
+			if (id.equals("default")) {
+				xmlIndex = R.xml.tex_default;
+				pngIndex = R.drawable.tex_default;
+			}
+			DebugLog.d(TAG, "getDrawable(" + pngIndex + ") type="
+					+ (res.getResourceTypeName(pngIndex))
+					+ " name=" + (res.getResourceEntryName(pngIndex)));
+			BitmapDrawable bmpDraw = (BitmapDrawable) res.getDrawable(pngIndex);
+			if (bmpDraw == null) {
+				throw new FileNotFoundException("R.drawable.tex_default 返回 null，资源不存在或无效");
+			}
+			Bitmap bitmap = bmpDraw.getBitmap();
+			if (bitmap == null) {
+				throw new FileNotFoundException("tex_default bitmap 为 null");
+			}
 		// TODO 增加样式
 
 		try {
