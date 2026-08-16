@@ -83,11 +83,20 @@ public class GraphicsActivity extends AppCompatActivity {
 			return;
 		}
 
-		if (ensureStoragePermission()) {
-			DebugLog.i(TAG, "权限已有，直接 initGraphicsView");
+		// 因为我们已经将所有文件通过 ContentResolver 复制到了应用的 cache 目录，
+		// 读取 cache 目录下的文件不需要任何存储权限。因此这里跳过 ensureStoragePermission 检查。
+		File checkFile = new File(filepath);
+		if (checkFile.exists() && checkFile.canRead()) {
+			DebugLog.i(TAG, "文件存在且可读，直接 initGraphicsView（跳过权限检查）");
 			initGraphicsView(filepath, dm.widthPixels, dm.heightPixels);
 		} else {
-			DebugLog.w(TAG, "权限未授予，已触发 requestPermissions 弹框，等待回调中");
+			DebugLog.e(TAG, "文件不存在或不可读，中止加载");
+			TextView pt = findViewById(R.id.progressText);
+			if (pt != null) {
+				pt.setText("❌ 文件不存在或不可读：" + filepath);
+				pt.setTextColor(0xFFD50000);
+			}
+			showLogPanel();
 		}
 	}
 
