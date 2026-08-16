@@ -238,10 +238,14 @@ public class GraphicsActivity extends AppCompatActivity {
 				if (logScrollRef != null) {
 					ViewGroup.LayoutParams slp = logScrollRef.getLayoutParams();
 					if (slp != null) {
-						slp.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+						// ScrollView 原生没有 setMaxHeight；直接固定一个 px 高度当"半高"
+						int halfPx = logHalfMaxPx > 0 ? logHalfMaxPx : Math.round(280 * getResources().getDisplayMetrics().density);
+						slp.height = halfPx;
+						if (slp instanceof LinearLayout.LayoutParams) {
+							((LinearLayout.LayoutParams) slp).weight = 0f;
+						}
 						logScrollRef.setLayoutParams(slp);
 					}
-					logScrollRef.setMaxHeight(logHalfMaxPx > 0 ? logHalfMaxPx : Math.round(280 * getResources().getDisplayMetrics().density));
 					logScrollRef.setVisibility(View.VISIBLE);
 				}
 				break;
@@ -264,7 +268,6 @@ public class GraphicsActivity extends AppCompatActivity {
 						}
 						logScrollRef.setLayoutParams(slp);
 					}
-					logScrollRef.setMaxHeight(dm2.heightPixels * 2); // 基本取消上限
 					logScrollRef.setVisibility(View.VISIBLE);
 				}
 				break;
