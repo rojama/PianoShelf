@@ -66,7 +66,7 @@ jobs:
             ~/Android/Sdk/platforms
             ~/Android/Sdk/build-tools
             ~/Android/Sdk/licenses
-          key: android-sdk-${{ env.ANDROID_COMPILE_SDK }}-${{ env.ANDROID_BUILD_TOOLS }}-v2
+          key: android-sdk-${{ env.ANDROID_COMPILE_SDK }}-${{ env.ANDROID_BUILD_TOOLS }}-v3
 
       - name: Install required Android SDK (platforms + build-tools) via sdkmanager
         run: |
@@ -114,7 +114,8 @@ jobs:
           mkdir -p "$ANDROID_HOME/licenses" || true
           yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
 
-          sdkmanager --sdk_root="$ANDROID_HOME" --no_https=false --verbose \
+          # 新版 cmdline-tools (11076708+) 默认走 HTTPS，并且不再支持 --no_https 参数
+          sdkmanager --sdk_root="$ANDROID_HOME" --verbose \
             "platforms;android-${ANDROID_COMPILE_SDK}" \
             "build-tools;${ANDROID_BUILD_TOOLS}" \
             "platform-tools"
