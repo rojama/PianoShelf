@@ -69,6 +69,9 @@ public class GraphicsView {
 	public int olddispalyPageNo = 1;
 	public SharedPreferences appPrefs;
 	private ProgressBar progressBar = null;
+	private android.widget.TextView progressText = null;
+	private android.widget.ScrollView logScroll = null;
+	private android.widget.TextView logText = null;
 	public boolean playOnCompleat = false;
 
 	// -------- playback scheduler (replaces Thread-per-note) --------
@@ -86,16 +89,77 @@ public class GraphicsView {
 	private static final int[][] RAW_ID_TABLE = new int[ROWS][COLS];
 	private static volatile boolean lookupBuilt = false;
 
+	/** 加载阶段百分比权重（总和 100）。 */
+	private static final int ST_CT = 5;      // 01. CommonTransfer 初始化
+	private static final int ST_IO = 10;     // 02. IO.initApplication
+	private static final int ST_LOAD = 50;   // 03. FileReader.loadScores (大活)
+	private static final int ST_SYM = 62;    // 04. 加载 SymbolPool
+	private static final int ST_SCR = 70;    // 05. setScreen（创建 Bitmap）
+	private static final int ST_PAINT = 98;  // 06. paint 渲染
+	private static final int ST_DONE = 100;  // 07. 完成
+
+	private volatile Throwable lastLoadError;
+
 	public GraphicsView(GraphicsActivity context) {
 		this.context = context;
 		ll = (LinearLayout) context.findViewById(R.id.linearLayout_image);
 		appPrefs = context.getSharedPreferences("appPreferences", Context.MODE_PRIVATE);
 		progressBar = (ProgressBar) context.findViewById(R.id.progressBar);
+		progressText = (android.widget.TextView) context.findViewById(R.id.progressText);
+		logScroll = (android.widget.ScrollView) context.findViewById(R.id.logScroll);
+		logText = (android.widget.TextView) context.findViewById(R.id.logText);
 		ensureLookupBuilt();
+		wireDebugLogPanel();
+	}
+
+	private void wireDebugLogPanel() {
+		if (logText == null) return;
+		// 启动时把 ring buffer 里现存的历史也先刷出来
+		logText.setText(DebugLog.dumpAll());
+		autoScrollLog();
+		DebugLog.setListener(new DebugLog.Listener() {
+			@Override public void onAppended(final String deltaOrAll) {
+				if (logText == null) return;
+				// setListener 初次回调可能是一大段（整份历史），之后每次都是新增行。
+				CharSequence old = logText.getText();
+				if (old == null || old.length() == 0) {
+					logText.setText(deltaOrAll);
+				} else {
+					if (deltaOrAll != null && deltaOrAll.length() > 0) {
+						logText.append(deltaOrAll);
+						if (!deltaOrAll.endsWith("\n")) logText.append("\n");
+					}
+				}
+				autoScrollLog();
+			}
+		});
+	}
+
+	private void autoScrollLog() {
+		if (logScroll == null || logText == null) return;
+		logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
+	}
+
+	/** 设置顶部横向进度条 + 文字百分比描述。可后台线程调用。 */
+	private void postProgress(final int pct, final String stageText) {
+		mainHandler.post(() -> {
+			if (progressBar != null) {
+				progressBar.setProgress(Math.max(0, Math.min(100, pct)));
+				progressBar.setVisibility(View.VISIBLE);
+			}
+			if (progressText != null) {
+				progressText.setText(String.format(java.util.Locale.US,
+						"%s  %d%%", stageText == null ? "" : stageText, pct));
+			}
+		});
 	}
 
 	public void showView() {
 		progressBar.setVisibility(View.VISIBLE);
+		lastLoadError = null;
+		DebugLog.i(TAG, "=======================================");
+		DebugLog.i(TAG, "开始加载乐谱: " + filepath);
+		postProgress(0, "启动加载");
 		executeAsync(new Runnable() {
 			// doLoad 声明 throws checked Exception；Runnable.run() 不能抛 checked，
 			// 这里包装为 RuntimeException。外层 executeAsync 会 catch(Throwable) 统一兜底。
@@ -108,6 +172,7 @@ public class GraphicsView {
 
 	public void reShowView() {
 		progressBar.setVisibility(View.VISIBLE);
+		DebugLog.d(TAG, "重新渲染第 " + dispalyPageNo + " 页（不重新解析）");
 		executeAsync(new Runnable() {
 			@Override public void run() {
 				try { doLoad(false); }
@@ -137,17 +202,24 @@ public class GraphicsView {
 			try { scheduler.shutdownNow(); } catch (Throwable ignored) {}
 			scheduler = null;
 		}
+		DebugLog.setListener(null);
 	}
 
 	private void executeAsync(final Runnable work) {
 		new Thread(new Runnable() {
 			@Override public void run() {
 				Bitmap bmp = null;
+				long t0 = System.currentTimeMillis();
 				try {
 					work.run();
 					bmp = (ct == null) ? null : ct.bitmap;
+					long t1 = System.currentTimeMillis();
+					DebugLog.i(TAG, String.format("渲染完成 耗时=%d ms  页数=%d  bitmap=%s",
+							(t1 - t0), dispalyPageNo,
+							bmp == null ? "null" : (bmp.getWidth() + "x" + bmp.getHeight())));
 				} catch (Throwable t) {
-					t.printStackTrace();
+					DebugLog.e(TAG, "加载/渲染异常（详情见下方堆栈）", t);
+					lastLoadError = t;
 					dispalyPageNo = olddispalyPageNo;
 					bmp = null;
 				}
@@ -162,11 +234,21 @@ public class GraphicsView {
 	/** Async body that builds the CommonTransfer + paints the target page. */
 	private void doLoad(boolean firstTime) throws Exception {
 		if (firstTime) {
+			postProgress(ST_CT, "初始化渲染上下文");
 			ct = new CommonTransfer();
+			postProgress(ST_IO, "初始化 IO 子系统");
+			DebugLog.d(TAG, "IO.initApplication");
 			IO.initApplication("GraphicsView");
+			postProgress(ST_LOAD - 5, "解析 MusicXML/MXL 0%");
+			DebugLog.d(TAG, "FileReader.loadScores 开始（最长耗时步骤）");
 			scoreList = FileReader.loadScores(filepath, new AllFilter());
+			DebugLog.i(TAG, "FileReader.loadScores 完成，scoreList.size=" + (scoreList == null ? 0 : scoreList.size()));
+			postProgress(ST_LOAD, "解析完成");
+			postProgress(ST_SYM, "加载 SymbolPool (字体符号)");
 			ct.context = context;
 			ct.symbolPool = SymbolPool.loadDefault(ct.context);
+			DebugLog.d(TAG, "SymbolPool.loadDefault 完成");
+			postProgress(ST_SCR, "创建画布 bitmap " + screenWidth + "x" + screenHeight);
 			ct.setScreen(screenWidth, screenHeight);
 			Paint paint = new Paint();
 			try {
@@ -178,16 +260,39 @@ public class GraphicsView {
 			ct.paint = paint;
 		}
 		if (ct == null || scoreList == null) {
-			throw new IllegalStateException("Cannot render: init failed");
+			throw new IllegalStateException("Cannot render: init failed (ct=" + ct + ", scoreList=" + scoreList + ")");
 		}
+		postProgress(ST_PAINT - 15, "渲染第 " + dispalyPageNo + " 页 0%");
+		DebugLog.d(TAG, "ct.setDisPageNo(dispalyPageNo=" + dispalyPageNo + ")");
 		ct.setDisPageNo(dispalyPageNo);
+		int total = scoreList.size();
+		int done = 0;
 		for (MxlScorePartwise sub : scoreList) {
+			int pct = ST_SCR + (ST_PAINT - ST_SCR) * done / Math.max(1, total);
+			postProgress(pct, "渲染 " + (done + 1) + "/" + total);
 			sub.paint(ct);
+			done++;
 		}
+		postProgress(ST_DONE, "渲染完成");
 	}
 
 	private void onLoadFinished(Bitmap result) {
-		if (progressBar != null) progressBar.setVisibility(View.INVISIBLE);
+		if (progressBar != null) {
+			if (result != null) {
+				progressBar.setProgress(100);
+			}
+			progressBar.setVisibility(View.INVISIBLE);
+		}
+		if (progressText != null) {
+			if (result != null) {
+				progressText.setText("完成 100%  (点击菜单/播放键听声音)");
+			} else if (lastLoadError != null) {
+				progressText.setText("❌ 加载失败：见日志面板堆栈");
+				progressText.setTextColor(0xFFD50000);
+			} else {
+				progressText.setText("未渲染出结果");
+			}
+		}
 		if (result != null) {
 			String pageInfo = String.format(
 					context.getString(R.string.info_page_no), dispalyPageNo);
@@ -204,9 +309,25 @@ public class GraphicsView {
 				play();
 			}
 		} else {
-			Toast.makeText(context,
-					context.getString(R.string.info_open_err),
-					Toast.LENGTH_SHORT).show();
+			StringBuilder sb = new StringBuilder();
+			sb.append(context.getString(R.string.info_open_err));
+			if (lastLoadError != null) {
+				sb.append('\n').append(lastLoadError.getClass().getSimpleName())
+				  .append(": ").append(lastLoadError.getLocalizedMessage());
+				Throwable cause = lastLoadError.getCause();
+				while (cause != null) {
+					sb.append("\n  caused by: ").append(cause.getClass().getSimpleName())
+					  .append(": ").append(cause.getLocalizedMessage());
+					cause = cause.getCause();
+				}
+			}
+			Toast.makeText(context, sb.toString(), Toast.LENGTH_LONG).show();
+			// 出错时把日志面板置顶露出
+			View panel = ((android.app.Activity) context).findViewById(R.id.debug_log_panel);
+			if (panel != null && panel.getVisibility() != View.VISIBLE) {
+				panel.setVisibility(View.VISIBLE);
+			}
+			autoScrollLog();
 		}
 	}
 

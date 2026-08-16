@@ -5,17 +5,79 @@
 
 	<LinearLayout android:orientation="vertical"
 		android:id="@+id/linearLayout_image" android:layout_width="match_parent"
-		android:layout_height="match_parent">
+		android:layout_height="match_parent"
+		android:layout_above="@+id/debug_log_panel">
 	</LinearLayout>
 
 	<ZoomControls android:layout_width="wrap_content"
 		android:id="@+id/zoomControls" android:layout_height="wrap_content"
 		android:layout_alignParentBottom="true"
-		android:layout_centerHorizontal="true"></ZoomControls>
+		android:layout_alignParentRight="true"
+		android:layout_margin="10dp"/>
 
 	<ProgressBar android:layout_width="wrap_content"
-		android:layout_height="wrap_content" style="?android:attr/progressBarStyleLarge"
-		android:id="@+id/progressBar" android:layout_centerVertical="true"
-		android:layout_centerHorizontal="true">></ProgressBar>
+		android:layout_height="wrap_content" style="?android:attr/progressBarStyleHorizontal"
+		android:id="@+id/progressBar" android:layout_centerHorizontal="true"
+		android:max="100"
+		android:progress="0"
+		android:indeterminate="false"
+		android:layout_marginTop="16dp"
+		android:minWidth="260dp"
+		android:layout_width="260dp"
+		android:layout_alignParentTop="true">
+	</ProgressBar>
 
+	<TextView
+		android:id="@+id/progressText"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_below="@id/progressBar"
+		android:layout_centerHorizontal="true"
+		android:textSize="12sp"
+		android:textColor="#37474F"
+		android:padding="4dp"
+		android:text="准备中… 0%"/>
+
+	<!-- 调试日志面板：ScrollView + 等宽 TextView，默认 0.33 屏高，用户可以滚动查看。出错时自动切到可见。 -->
+	<LinearLayout
+		android:id="@+id/debug_log_panel"
+		android:layout_width="match_parent"
+		android:layout_height="wrap_content"
+		android:maxHeight="280dp"
+		android:orientation="vertical"
+		android:background="#FAFAFA"
+		android:layout_alignParentBottom="true"
+		android:visibility="visible">
+
+		<TextView
+			android:layout_width="match_parent"
+			android:layout_height="wrap_content"
+			android:padding="4dp"
+			android:text="调试日志（可上下滚动查看，点击手机菜单按钮播放/暂停/翻页）"
+			android:textColor="#FFFFFF"
+			android:background="#263238"
+			android:textSize="11sp"/>
+
+		<ScrollView
+			android:id="@+id/logScroll"
+			android:layout_width="match_parent"
+			android:layout_height="match_parent"
+			android:minHeight="160dp"
+			android:maxHeight="240dp"
+			android:background="#263238"
+			android:scrollbars="vertical"
+			android:fillViewport="true">
+
+			<TextView
+				android:id="@+id/logText"
+				android:layout_width="match_parent"
+				android:layout_height="wrap_content"
+				android:padding="6dp"
+				android:textSize="10sp"
+				android:lineSpacingExtra="-1dp"
+				android:fontFamily="monospace"
+				android:textColor="#AEEA00"
+				android:text=""/>
+		</ScrollView>
+	</LinearLayout>
 </RelativeLayout>

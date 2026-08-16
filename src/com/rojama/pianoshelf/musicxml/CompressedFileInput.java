@@ -1,5 +1,6 @@
 package com.rojama.pianoshelf.musicxml;
 
+import com.rojama.pianoshelf.DebugLog;
 import com.xenoage.util.FileTools;
 import com.xenoage.util.exceptions.InvalidFormatException;
 import com.xenoage.util.xml.XMLReader;
@@ -26,6 +27,7 @@ public class CompressedFileInput {
 
 	public CompressedFileInput(InputStream inputStream, File osTempFolder) throws IOException {
 		this.osTempFolder = osTempFolder;
+		DebugLog.d("Compressed", "[MXL] 创建临时目录 + ZIP 解压中…");
 
 		this.tempFolder = new File(osTempFolder, UUID.randomUUID().toString());
 		
@@ -35,11 +37,13 @@ public class CompressedFileInput {
 			}
 
 			ZipTools.extractAll(inputStream, this.tempFolder);
+			DebugLog.i("Compressed", "[MXL] ZIP 解压完成到 " + this.tempFolder);
 			Document doc;
 			try {
 				doc = XMLReader.readFile(SafeXmlStream.wrap(new FileInputStream(new File(this.tempFolder,
 						"META-INF/container.xml"))));
 			} catch (Exception ex) {
+				DebugLog.e("Compressed", "[MXL] container.xml 解析失败", ex);
 				throw new IllegalStateException(
 						"Compressed MusicXML file has no (well-formed) META-INF/container.xml", ex);
 			}
@@ -51,6 +55,7 @@ public class CompressedFileInput {
 			} catch (Exception ex) {
 				throw new IllegalStateException("Invalid META-INF/container.xml", ex);
 			}
+			DebugLog.i("Compressed", "[MXL] rootfile/@full-path=" + rootfilePath);
 
 			File rootfile = new File(this.tempFolder, rootfilePath);
 
