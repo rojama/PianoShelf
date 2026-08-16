@@ -32,3 +32,12 @@ Thumbs.db
 
 # ===== 日志 =====
 *.log
+# CI-local scratch artifacts (from prior manual artifact unzips)
+.artifacts_run_*/
+.ci_poll_gh.py
+PianoShelf-release.apk.sha256
+PianoShelf-debug*.sha256
+/local.properties
+/captures
+.externalNativeBuild
+.cxx
