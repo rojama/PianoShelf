@@ -66,7 +66,7 @@ jobs:
             ~/Android/Sdk/platforms
             ~/Android/Sdk/build-tools
             ~/Android/Sdk/licenses
-          key: android-sdk-${{ env.ANDROID_COMPILE_SDK }}-${{ env.ANDROID_BUILD_TOOLS }}-v1
+          key: android-sdk-${{ env.ANDROID_COMPILE_SDK }}-${{ env.ANDROID_BUILD_TOOLS }}-v2
 
       - name: Install required Android SDK (platforms + build-tools) via sdkmanager
         run: |
@@ -75,7 +75,11 @@ jobs:
           mkdir -p "$ANDROID_HOME"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+          # ── 关键点 1：cmdline-tools/latest/bin 放到 GITHUB_PATH，影响后续 step
           echo "$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+          # ── 关键点 2：同时更新当前 step 的 $PATH（否则 sdkmanager 本 step 内就找不到）
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
 
           if [ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
             CMDLINE_ZIP="$HOME/.android/cache/cmdline-tools-11076708-linux.zip"
@@ -88,9 +92,24 @@ jobs:
             TMP_UNPACK="$ANDROID_HOME/cmdline-tools/_tmp_unpack"
             rm -rf "$TMP_UNPACK"
             unzip -q "$CMDLINE_ZIP" -d "$TMP_UNPACK"
-            mv "$TMP_UNPACK/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+            # ── 关键点 3：zip 根目录就是 cmdline-tools，内部是 bin/ 和 lib/
+            #    正确安装到 cmdline-tools/latest/{bin,lib} 而非 latest/cmdline-tools/...
+            #    官方推荐路径：$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager
+            if [ -d "$TMP_UNPACK/cmdline-tools/bin" ]; then
+              # 新 zip 结构：cmdline-tools/bin 直接在根
+              mkdir -p "$ANDROID_HOME/cmdline-tools/latest"
+              mv "$TMP_UNPACK/cmdline-tools"/* "$ANDROID_HOME/cmdline-tools/latest/"
+              rm -rf "$TMP_UNPACK/cmdline-tools"
+            else
+              # 老 zip 兜底：内部有 latest 或某个子目录，按名迁移
+              mv "$TMP_UNPACK/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+            fi
             rm -rf "$TMP_UNPACK"
           fi
+
+          # 验证 sdkmanager 路径
+          echo "which sdkmanager: $(which sdkmanager || true)"
+          ls -la "$ANDROID_HOME/cmdline-tools/latest/bin/" || true
 
           mkdir -p "$ANDROID_HOME/licenses" || true
           yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses >/dev/null 2>&1 || true
