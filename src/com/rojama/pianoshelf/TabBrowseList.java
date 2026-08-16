@@ -7,9 +7,8 @@ import java.util.List;
 
 import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Build;
-import android.view.LayoutInflater;
+import android.os.Environment;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -24,47 +23,42 @@ import android.widget.AdapterView.OnItemLongClickListener;
 import androidx.core.content.FileProvider;
 
 /**
- * Tab 1: 文件浏览器 — Scoped Storage 重制版。
+ * Tab 1: 文件浏览器 — 支持根目录浏览版。
  *
- * 为什么原代码在小米 14 / Android 14 上是空的：
- *   原实现直接 listFiles("/sdcard") + "向上/向下"目录树。
- *   Android 13+ 上 READ_EXTERNAL_STORAGE 变成「零授予」，
- *   所以 "/" 的 children 一定是 null → 空白屏。
- *
- * 修复：
- *   - 顶部 header 提供两块入口：
- *      ①「打开乐谱文件」→ ACTION_OPEN_DOCUMENT（系统 SAF 文件选择器，可进任意目录/USB/云盘）
- *      ②「选择目录」→ ACTION_OPEN_DOCUMENT_TREE（持久化授权后，列出该目录下所有 .xml/.mxl）
- *   - Android 11+ 默认用 MediaStore.Files 零权限聚合查询填充内容，
- *     展示系统媒体库里所有 .xml/.mxl 文件（用户用微信/浏览器/文件管理器保存过的都会出现）。
- *   - Android 6-12 仍保留 legacy 目录树；用户选过 SAF tree 后优先展示 SAF tree。
- *   - GraphicsActivity 启动统一用 FileProvider (避免 FileUriExposedException)。
+ * 访问模式（优先级从高到低）:
+ *   1. ROOT 模式：用户授予了 MANAGE_EXTERNAL_STORAGE → 直接用 File API 访问
+ *      /storage/emulated/0 整个外部存储，像 ES File Explorer 那样
+ *   2. SAF 模式：用户通过 ACTION_OPEN_DOCUMENT_TREE 授权了某个目录
+ *   3. Legacy 模式：Android 6-12 且有 READ_EXTERNAL_STORAGE 权限
+ *   4. MediaStore 模式：Android 13+ 默认的零权限兜底
  */
 public class TabBrowseList extends ListView implements OnItemClickListener, OnItemLongClickListener {
 	private static final String FILEPROVIDER_AUTH = "com.rojama.pianoshelf.fileprovider";
 
+	// 外部存储根路径
+	private static final String EXTERNAL_ROOT = "/storage/emulated/0";
+
 	// 数据源
-	// displayItems / displayPaths 是 ListView 实际展示内容（含 "返回上一级"、SAF tree 条目、MediaStore 条目等）
 	private final List<String> displayItems = new ArrayList<>();
 	private final List<Entry> displayEntries = new ArrayList<>();
 
 	private static final class Entry {
 		enum Kind {
-			BACK_TO_ROOT, BACK_TO_PARENT,   // 导航伪条目
-			LEGACY_FILE, LEGACY_DIR,         // 旧版 File API
-			MEDIASTORE,                      // MediaStore 查出来的（仅文件）
-			SAF_FILE, SAF_DIR                // DocumentsContract 下条目
+			BACK_TO_ROOT, BACK_TO_PARENT,
+			LEGACY_FILE, LEGACY_DIR,
+			MEDIASTORE,
+			SAF_FILE, SAF_DIR
 		}
 		final Kind kind;
-		final String label;                 // 展示用
-		final String legacyPath;            // LEGACY_* 用
-		final PianoShelfActivity.MediaStoreMusicXmlEntry media; // MEDIASTORE 用
-		final SafeFileResolver.DocEntry doc;  // SAF_* 用
-		final Uri safTreeUri;               // SAF_* 用
+		final String label;
+		final String legacyPath;
+		final PianoShelfActivity.MediaStoreMusicXmlEntry media;
+		final SafeFileResolver.DocEntry doc;
+		final android.net.Uri safTreeUri;
 
 		Entry(Kind k, String label, String legacyPath,
 				PianoShelfActivity.MediaStoreMusicXmlEntry media,
-				SafeFileResolver.DocEntry doc, Uri safTreeUri) {
+				SafeFileResolver.DocEntry doc, android.net.Uri safTreeUri) {
 			this.kind = k; this.label = label; this.legacyPath = legacyPath;
 			this.media = media; this.doc = doc; this.safTreeUri = safTreeUri;
 		}
@@ -74,12 +68,19 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 	private String rootpath = "/";
 	private String currentLegacyPath = "/";
 
-	// SAF 目录树模式：用户选过 ACTION_OPEN_DOCUMENT_TREE 后启用
-	private Uri boundTreeUri = null;
+	// Root browsing mode state
+	private boolean rootBrowsingMode = false;
+	private String currentRootPath = EXTERNAL_ROOT;
+
+	// SAF 目录树模式
+	private android.net.Uri boundTreeUri = null;
 	private String currentSafDocId = null;
 
-	// header views (缓存引用，避免重复 add)
+	// Header views
 	private View headerView = null;
+	private Button btnBrowseRoot = null;
+	private Button btnRootAccess = null;
+	private TextView permHintView = null;
 
 	public TabBrowseList(Context context) {
 		super(context);
@@ -87,14 +88,12 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 		this.setOnItemLongClickListener(this);
 		dbhelp = ((PianoShelfActivity) context).dbhelp;
 
-		// 先加 header（SAF 入口 + 提示），再加 adapter
 		inflateAndAttachHeader();
-
 		refreshForCurrentAccessMode();
 	}
 
 	// ------------------------------------------------------------------
-	// Header: SAF 入口按钮 + Scoped Storage 提示
+	// Header: SAF 入口按钮 + 根目录浏览入口
 	// ------------------------------------------------------------------
 
 	private void inflateAndAttachHeader() {
@@ -102,9 +101,7 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 		headerView = buildHeaderProgrammatically();
 		try {
 			addHeaderView(headerView, null, false);
-		} catch (Throwable ignored) {
-			// 某些旧设备 addHeaderView 需要在 setAdapter 前；已先调用，忽略
-		}
+		} catch (Throwable ignored) {}
 	}
 
 	private View buildHeaderProgrammatically() {
@@ -120,10 +117,11 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 		hint.setPadding(0, 0, 0, pad / 2);
 		root.addView(hint);
 
-		LinearLayout btnRow = new LinearLayout(ctx);
-		btnRow.setOrientation(LinearLayout.HORIZONTAL);
-		btnRow.setPadding(0, 0, 0, pad / 2);
-		btnRow.setWeightSum(2);
+		// 第一行：打开文件 + 选择目录
+		LinearLayout btnRow1 = new LinearLayout(ctx);
+		btnRow1.setOrientation(LinearLayout.HORIZONTAL);
+		btnRow1.setPadding(0, 0, 0, pad / 2);
+		btnRow1.setWeightSum(2);
 
 		Button btnFile = new Button(ctx);
 		btnFile.setText(R.string.browse_btn_open_file);
@@ -138,11 +136,10 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 		LinearLayout.LayoutParams p1 = new LinearLayout.LayoutParams(
 				0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
 		p1.setMarginEnd(pad / 2);
-		btnRow.addView(btnFile, p1);
+		btnRow1.addView(btnFile, p1);
 
 		Button btnDir = new Button(ctx);
 		btnDir.setText(R.string.browse_btn_open_dir);
-		btnDir.setEnabled(SafeFileResolver.isTreeUriSupported());
 		btnDir.setOnClickListener(new OnClickListener() {
 			@Override public void onClick(View v) {
 				if (ctx instanceof PianoShelfActivity) {
@@ -154,8 +151,47 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 		LinearLayout.LayoutParams p2 = new LinearLayout.LayoutParams(
 				0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
 		p2.setMarginStart(pad / 2);
-		btnRow.addView(btnDir, p2);
-		root.addView(btnRow);
+		btnRow1.addView(btnDir, p2);
+		root.addView(btnRow1);
+
+		// 第二行：浏览根目录（有权限直接进，无权限去授权）
+		LinearLayout btnRow2 = new LinearLayout(ctx);
+		btnRow2.setOrientation(LinearLayout.HORIZONTAL);
+		btnRow2.setPadding(0, 0, 0, pad / 2);
+
+		btnBrowseRoot = new Button(ctx);
+		btnBrowseRoot.setText(R.string.browse_btn_browse_root);
+		btnBrowseRoot.setOnClickListener(new OnClickListener() {
+			@Override public void onClick(View v) {
+				openRootDirectory();
+			}
+		});
+		LinearLayout.LayoutParams p3 = new LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+		btnRow2.addView(btnBrowseRoot, p3);
+		root.addView(btnRow2);
+
+		// 权限提示（未授权时显示）
+		permHintView = new TextView(ctx);
+		permHintView.setText(R.string.browse_root_permission_required);
+		permHintView.setTextSize(12);
+		permHintView.setPadding(0, 0, 0, pad / 2);
+		root.addView(permHintView);
+
+		// 授权按钮
+		btnRootAccess = new Button(ctx);
+		btnRootAccess.setText(R.string.browse_root_go_settings);
+		btnRootAccess.setOnClickListener(new OnClickListener() {
+			@Override public void onClick(View v) {
+				if (ctx instanceof PianoShelfActivity) {
+					((PianoShelfActivity) ctx).requestManageExternalStorage();
+				}
+			}
+		});
+		LinearLayout.LayoutParams p4 = new LinearLayout.LayoutParams(
+				LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+		p4.setPadding(0, 0, 0, pad / 2);
+		root.addView(btnRootAccess, p4);
 
 		TextView note = new TextView(ctx);
 		note.setText(R.string.browse_scoped_storage_note);
@@ -163,7 +199,6 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 		note.setPadding(0, 0, 0, pad);
 		root.addView(note);
 
-		// 一条分隔线
 		View sep = new View(ctx);
 		sep.setBackgroundColor(0x33808080);
 		LinearLayout.LayoutParams ps = new LinearLayout.LayoutParams(
@@ -180,41 +215,95 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 	}
 
 	// ------------------------------------------------------------------
-	// 对外刷新入口（PianoShelfActivity 切 Tab / 权限回来 / SAF 返回 时调用）
+	// 对外刷新入口
 	// ------------------------------------------------------------------
 
 	public void refreshForCurrentAccessMode() {
-		if (boundTreeUri != null) {
-			// SAF 目录树模式（用户选过目录，优先展示这个）
+		PianoShelfActivity act = (PianoShelfActivity) getContext();
+		boolean hasRootPerm = act.isExternalStorageManager();
+
+		// 更新权限提示可见性
+		updatePermissionUI(hasRootPerm);
+
+		if (rootBrowsingMode) {
+			// 已在根浏览模式，保持显示
+			getFileDir(currentRootPath);
+		} else if (hasRootPerm) {
+			// 有权限：直接进入根浏览模式，列出 /storage/emulated/0
+			rootBrowsingMode = true;
+			currentRootPath = EXTERNAL_ROOT;
+			getFileDir(EXTERNAL_ROOT);
+		} else if (boundTreeUri != null) {
 			loadSafTree(currentSafDocId);
 		} else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-			// Android 11+：零权限用 MediaStore 填充（避免空白屏）
 			loadMediaStoreFiles();
 		} else {
-			// Android 6-10：走 legacy 目录树（需要 permission，拿不到时再降级 MediaStore）
 			try {
 				int r = androidx.core.content.ContextCompat.checkSelfPermission(
 						getContext(), android.Manifest.permission.READ_EXTERNAL_STORAGE);
 				if (r == android.content.pm.PackageManager.PERMISSION_GRANTED) {
 					getFileDir(currentLegacyPath);
 				} else {
-					loadMediaStoreFiles();
+					showInitialContent();
 				}
 			} catch (Throwable ignore) {
-				loadMediaStoreFiles();
+				showInitialContent();
 			}
 		}
 	}
 
-	/** 用户选过 ACTION_OPEN_DOCUMENT_TREE 后，PianoShelfActivity 调这里绑定 */
-	public void bindToDocumentTree(Uri treeUri) {
+	private void updatePermissionUI(boolean hasRootPerm) {
+		int visibility = hasRootPerm ? View.GONE : View.VISIBLE;
+		if (permHintView != null) {
+			permHintView.setVisibility(visibility);
+		}
+		if (btnRootAccess != null) {
+			btnRootAccess.setVisibility(visibility);
+		}
+		if (btnBrowseRoot != null) {
+			btnBrowseRoot.setText(hasRootPerm
+					? R.string.browse_btn_continue_root
+					: R.string.browse_btn_browse_root);
+		}
+	}
+
+	private void showInitialContent() {
+		// 显示 MediaStore 文件列表 + 提示
+		loadMediaStoreFiles();
+	}
+
+	/** 打开根目录浏览 */
+	public void openRootDirectory() {
+		PianoShelfActivity act = (PianoShelfActivity) getContext();
+		if (!act.isExternalStorageManager()) {
+			act.requestManageExternalStorage();
+			return;
+		}
+		// 已有权限：进入根浏览模式
+		rootBrowsingMode = true;
+		currentRootPath = EXTERNAL_ROOT;
+		Toast.makeText(getContext(), R.string.browse_root_toast_listing, Toast.LENGTH_SHORT).show();
+		getFileDir(EXTERNAL_ROOT);
+	}
+
+	/** 退出根浏览模式 */
+	public void exitRootBrowsing() {
+		rootBrowsingMode = false;
+		boundTreeUri = null;
+		// 不自动重新进入根浏览，改为展示 MediaStore 文件列表
+		loadMediaStoreFiles();
+	}
+
+	/** 用户选过 ACTION_OPEN_DOCUMENT_TREE 后绑定 */
+	public void bindToDocumentTree(android.net.Uri treeUri) {
 		this.boundTreeUri = treeUri;
 		this.currentSafDocId = SafeFileResolver.getRootDocId(treeUri);
+		this.rootBrowsingMode = false;
 		refreshForCurrentAccessMode();
 	}
 
 	// ------------------------------------------------------------------
-	// 模式 A：Legacy 目录树（Android 6-12 且有存储权限时用）
+	// 模式 A：Legacy / Root 目录树
 	// ------------------------------------------------------------------
 
 	public void getFileDir() {
@@ -227,15 +316,51 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 			displayItems.clear();
 			displayEntries.clear();
 			File f = new File(filePath);
+			if (!f.exists()) {
+				loadMediaStoreFiles();
+				return;
+			}
+			if (!f.canRead()) {
+				// 尝试用 root 权限
+				PianoShelfActivity act = (PianoShelfActivity) getContext();
+				if (act.isExternalStorageManager()) {
+					// 有 root 权限但仍读不到，可能是路径问题
+					Toast.makeText(getContext(), R.string.browse_root_failed, Toast.LENGTH_LONG).show();
+					rootBrowsingMode = false;
+					loadMediaStoreFiles();
+					return;
+				} else {
+					Toast.makeText(getContext(), R.string.browse_root_failed, Toast.LENGTH_LONG).show();
+					rootBrowsingMode = false;
+					loadMediaStoreFiles();
+					return;
+				}
+			}
 			File[] files = f.listFiles(new MusicFileFilter());
 
-			if (!filePath.equals(rootpath)) {
+			// 添加导航条目
+			if (!filePath.equals(rootpath) && !filePath.equals(EXTERNAL_ROOT)) {
 				displayItems.add(getContext().getString(R.string.dis_back_root));
 				displayEntries.add(new Entry(Entry.Kind.BACK_TO_ROOT, null, rootpath, null, null, null));
-				String parent = f.getParent() == null ? rootpath : f.getParent();
-				displayItems.add(String.format(getContext().getString(R.string.dis_back_up), parent));
-				displayEntries.add(new Entry(Entry.Kind.BACK_TO_PARENT, null, parent, null, null, null));
+				String parent = f.getParent();
+				if (parent != null && !parent.equals("/")) {
+					displayItems.add(String.format(getContext().getString(R.string.dis_back_up), parent));
+					displayEntries.add(new Entry(Entry.Kind.BACK_TO_PARENT, null, parent, null, null, null));
+				} else {
+					// 到达根目录的特殊处理
+					displayItems.add(String.format(getContext().getString(R.string.dis_back_up), EXTERNAL_ROOT));
+					displayEntries.add(new Entry(Entry.Kind.BACK_TO_PARENT, null, EXTERNAL_ROOT, null, null, null));
+				}
+			} else if (filePath.equals(EXTERNAL_ROOT) && !rootBrowsingMode) {
+				// 非 root 浏览模式下在 /storage/emulated/0 根
+				displayItems.add(getContext().getString(R.string.dis_back_root));
+				displayEntries.add(new Entry(Entry.Kind.BACK_TO_ROOT, null, rootpath, null, null, null));
+			} else if (rootBrowsingMode && filePath.equals(EXTERNAL_ROOT)) {
+				// 在 root 浏览模式下显示"退出根浏览"选项
+				displayItems.add("[退出根浏览]");
+				displayEntries.add(new Entry(Entry.Kind.BACK_TO_ROOT, null, "__EXIT_ROOT__", null, null, null));
 			}
+
 			if (files != null) {
 				for (File file : files) {
 					String name = file.getName();
@@ -246,15 +371,22 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 							label, file.getAbsolutePath(), null, null, null));
 				}
 			}
-			currentLegacyPath = filePath;
+			if (rootBrowsingMode) {
+				currentRootPath = filePath;
+			} else {
+				currentLegacyPath = filePath;
+			}
 			applyAdapter();
 		} catch (Exception e) {
 			e.printStackTrace();
+			Toast.makeText(getContext(), R.string.info_open_err, Toast.LENGTH_SHORT).show();
+			if (rootBrowsingMode) rootBrowsingMode = false;
+			loadMediaStoreFiles();
 		}
 	}
 
 	// ------------------------------------------------------------------
-	// 模式 B：MediaStore 零权限聚合（Android 11+ 默认 / Legacy 没权限时兜底）
+	// 模式 B：MediaStore 零权限聚合
 	// ------------------------------------------------------------------
 
 	private void loadMediaStoreFiles() {
@@ -264,7 +396,7 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 		displayEntries.clear();
 		if (list == null || list.isEmpty()) {
 			displayItems.add(getContext().getString(R.string.browse_no_matching_files));
-			displayEntries.add(null); // 哨兵：点击不响应
+			displayEntries.add(null);
 		} else {
 			for (PianoShelfActivity.MediaStoreMusicXmlEntry e : list) {
 				displayItems.add(e.displayName);
@@ -276,7 +408,7 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 	}
 
 	// ------------------------------------------------------------------
-	// 模式 C：SAF 目录树（用户授权了某个具体目录，支持子目录跳转）
+	// 模式 C：SAF 目录树
 	// ------------------------------------------------------------------
 
 	private void loadSafTree(String docId) {
@@ -287,11 +419,8 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 		displayEntries.clear();
 		String rootDocId = SafeFileResolver.getRootDocId(boundTreeUri);
 		if (docId == null) docId = rootDocId;
-		// 非根目录显示"返回"
 		if (!(docId == rootDocId || (docId != null && docId.equals(rootDocId)))) {
 			displayItems.add(getContext().getString(R.string.dis_back_up, "…"));
-			// parent docId 无法直接拿（DocumentsContract 没给简单 API），
-			// 简单处理："上一"级退回到根（用户可从根重新进）
 			displayEntries.add(new Entry(Entry.Kind.BACK_TO_ROOT, null, null, null, null, null));
 		}
 		if (children == null || children.isEmpty()) {
@@ -311,7 +440,7 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 	}
 
 	// ------------------------------------------------------------------
-	// 通用：刷新 adapter
+	// Adapter
 	// ------------------------------------------------------------------
 
 	private ArrayAdapter<String> adapter = null;
@@ -332,17 +461,21 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 
 	@Override
 	public void onItemClick(AdapterView<?> l, View v, int position, long id) {
-		// 减去 header 偏移
 		int headerCount = getHeaderViewsCount();
 		int pos = position - headerCount;
 		if (pos < 0 || pos >= displayEntries.size()) return;
 		Entry e = displayEntries.get(pos);
-		if (e == null) return; // 哨兵（"未找到文件"）
+		if (e == null) return;
 
 		switch (e.kind) {
 			case BACK_TO_ROOT:
-				if (boundTreeUri != null) {
+				if ("__EXIT_ROOT__".equals(e.legacyPath)) {
+					// 退出根浏览模式
+					exitRootBrowsing();
+				} else if (boundTreeUri != null) {
 					loadSafTree(SafeFileResolver.getRootDocId(boundTreeUri));
+				} else if (rootBrowsingMode) {
+					getFileDir(EXTERNAL_ROOT);
 				} else {
 					getFileDir(rootpath);
 				}
@@ -366,7 +499,6 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 			}
 
 			case MEDIASTORE: {
-				// MediaStore 条目：优先用 _data（老版本），否则 openInputStream → cache
 				PianoShelfActivity.MediaStoreMusicXmlEntry m = e.media;
 				String path = tryOpenMediaStoreEntry(m);
 				if (path == null) {
@@ -383,7 +515,7 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 				return;
 			}
 			case SAF_FILE: {
-				Uri docUri = SafeFileResolver.buildChildUri(e.safTreeUri, e.doc.docId);
+				android.net.Uri docUri = SafeFileResolver.buildChildUri(e.safTreeUri, e.doc.docId);
 				if (docUri == null) { toast(R.string.info_open_err); return; }
 				String path = SafeFileResolver.materializeToCacheFile(getContext(), docUri);
 				if (path == null) { toast(R.string.info_open_err); return; }
@@ -411,7 +543,7 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 				fileAbsPath = tryOpenMediaStoreEntry(e.media);
 				break;
 			case SAF_FILE: {
-				Uri docUri = SafeFileResolver.buildChildUri(e.safTreeUri, e.doc.docId);
+				android.net.Uri docUri = SafeFileResolver.buildChildUri(e.safTreeUri, e.doc.docId);
 				if (docUri != null) fileAbsPath = SafeFileResolver.materializeToCacheFile(
 						getContext(), docUri);
 				break;
@@ -433,20 +565,12 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 		Toast.makeText(getContext(), getContext().getString(resId), Toast.LENGTH_SHORT).show();
 	}
 
-	/**
-	 * 打开 MediaStore 条目：
-	 *  - 若有绝对 _data 且可读 → 直接返回
-	 *  - 否则通过 ContentResolver.openInputStream(_ID) → 拷贝到 cache 返回
-	 */
 	private String tryOpenMediaStoreEntry(PianoShelfActivity.MediaStoreMusicXmlEntry m) {
 		if (m == null) return null;
-		// Android 10 以下 DATA 是绝对路径
 		if (m.absolutePath != null && !m.absolutePath.isEmpty()) {
 			File f = new File(m.absolutePath);
 			if (f.isFile() && f.canRead()) return f.getAbsolutePath();
 		}
-		// Scoped Storage：DATA 可能是 RELATIVE_PATH（只是 "Download/"），不可直接访问
-		// 走 ContentUris.withAppendedId(EXTERNAL_CONTENT_URI, id) → 开流 → cache
 		try {
 			android.net.Uri uri = android.content.ContentUris.withAppendedId(
 					android.provider.MediaStore.Files.getContentUri(
@@ -463,10 +587,9 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 	// 辅助
 	// ------------------------------------------------------------------
 
-	/** Safe cross-version launcher for GraphicsActivity via FileProvider. */
 	static void launchGraphicsActivity(Context context, File file) {
 		try {
-			Uri uri = FileProvider.getUriForFile(context, FILEPROVIDER_AUTH, file);
+			android.net.Uri uri = FileProvider.getUriForFile(context, FILEPROVIDER_AUTH, file);
 			Intent intent = new Intent();
 			intent.setDataAndType(uri, "application/vnd.recordare.musicxml");
 			intent.setClass(context, GraphicsActivity.class);
@@ -485,7 +608,7 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 		public boolean accept(File file) {
 			if (!file.canRead()) return false;
 			String name = file.getName();
-			if (name.startsWith(".") || "LOST.DIR".equals(name) || "DCIM".equals(name)) {
+			if (name.startsWith(".") || "LOST.DIR".equals(name)) {
 				return false;
 			}
 			if (file.isDirectory()) return true;

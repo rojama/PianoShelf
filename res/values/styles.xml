@@ -1,34 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    Styles for modernized PianoShelf (AndroidX AppCompat).
-
-    These themes are referenced from AndroidManifest.xml and ensure
-    AppCompat/Material components (ActionBar, Toolbar, Settings) render
-    correctly without "You need to use a Theme.AppCompat" crashes.
--->
 <resources xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Base application theme. Used by PianoShelfActivity (home screen).
-         Light theme with dark-colored action bar. -->
+         Edge-to-edge support for Android 10+ (API 29+) -->
     <style name="Theme.PianoShelf" parent="Theme.MaterialComponents.Light.DarkActionBar.Bridge">
         <item name="colorPrimary">#303F9F</item>
         <item name="colorPrimaryDark">#1A237E</item>
         <item name="colorAccent">#FF5252</item>
         <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 
-    <!-- Fullscreen variant used by GraphicsActivity.
-         No title bar, no action bar, full screen immersive -->
+    <!-- Fullscreen variant used by GraphicsActivity. -->
     <style name="Theme.PianoShelf.Fullscreen" parent="Theme.MaterialComponents.NoActionBar.Bridge">
         <item name="android:windowFullscreen">true</item>
         <item name="android:windowContentOverlay">@null</item>
         <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
     </style>
 
-    <!-- Settings screen theme (has visible ActionBar with back button) -->
+    <!-- Settings screen theme -->
     <style name="Theme.PianoShelf.Settings" parent="Theme.MaterialComponents.Light.DarkActionBar.Bridge">
         <item name="colorPrimary">#303F9F</item>
         <item name="colorPrimaryDark">#1A237E</item>
         <item name="colorAccent">#FF5252</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

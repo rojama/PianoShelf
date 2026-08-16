@@ -1,55 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.rojama.pianoshelf"
-    android:versionCode="2"
-    android:versionName="2.0.0-modernized">
+    android:versionCode="4"
+    android:versionName="2.2.0-android16">
 
-    <!--
-        Modernized Manifest:
-        - Elevated minSdk to 21 (Android 5.0 Lollipop) to match Gradle config
-        - Added READ_EXTERNAL_STORAGE explicitly (WRITE implies READ pre-19, but
-          newer Android releases split them)
-        - Android 12+ requires "android:exported" on activities/services that declare
-          intent filters → set exported="true" on the two launchable activities
-        - Declares androidx.core.content.FileProvider to avoid
-          android.os.FileUriExposedException on Android 7+
-    -->
-    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="34" />
-
-    <!--
-        Storage permissions, modernized for Scoped Storage (Android 10+):
-        - READ_EXTERNAL_STORAGE: useful only on API 29-32 (Android 10-12L).
-          On API 33+ (Android 13+) the permission is null-granted (always denied
-          at request time even if declared), so the legacy file tree at "/" cannot
-          return children listFiles(). On API 33+ we MUST use one of:
-             a) ACTION_OPEN_DOCUMENT (system SAF file picker - supported in-app)
-             b) MediaStore query (indexes Music/Download/Documents automatically)
-             c) android:requestLegacyExternalStorage=true on Android 10 (API 29)
-                (kept for users that upgrade and still rely on absolute paths)
-        - WRITE_EXTERNAL_STORAGE: no-op on API >=19 when writing to public shared
-          storage dirs; we set maxSdkVersion=32 so Android 13+ doesn't even ask.
-        - INTERNET: always granted on install (non-dangerous).
-    -->
+    <!-- Scoped Storage: Android 13+ (API 33) these are null-granted; we declare maxSdkVersion=32 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+
+    <!--
+      MANAGE_EXTERNAL_STORAGE: 允许 App 访问 /storage/emulated/0 下所有文件（类 ES File Explorer）。
+      用户必须手动在系统设置里授权一次（Settings → Apps → 所有文件访问权限）。
+      小米 HyperOS / 原生 Android 11+ 都是这个流程。
+    -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!--
-      requestLegacyExternalStorage=true lets legacy TabBrowseList list "/"
-      normally on Android 10 (API 29). On Android 11+ (API 30+) it is
-      IGNORED by the platform (Scoped Storage is always enforced), and on
-      API 28- it has no effect, so this attribute is safe to keep true.
-    -->
+    <!-- 声明可以查询 Settings 里的文件权限页面（华为/小米/OPPO 有自己的路径） -->
+    <queries>
+        <intent>
+            <action android:name="android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.MANAGE_APP_FILE_PERMISSIONS" />
+        </intent>
+    </queries>
+
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="36" />
+
     <application
         android:allowBackup="true"
         android:icon="@drawable/icon"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:requestLegacyExternalStorage="true"
-        android:theme="@style/Theme.PianoShelf">
+        android:theme="@style/Theme.PianoShelf"
+        android:hardwareAccelerated="true">
 
         <activity
             android:name=".PianoShelfActivity"
@@ -76,11 +68,10 @@
                 <data android:mimeType="application/x-zip-compressed" />
                 <data android:mimeType="text/xml" />
                 <data android:mimeType="application/xml" />
-                <!-- Also accept when opened by path suffix via a file explorer -->
                 <data android:scheme="file" />
                 <data android:scheme="content" />
-                <data android:pathPattern=".*\.xml" />
-                <data android:pathPattern=".*\.mxl" />
+                <data android:pathPattern=".*\\.xml" />
+                <data android:pathPattern=".*\\.mxl" />
             </intent-filter>
         </activity>
 
@@ -90,7 +81,6 @@
             android:label="@string/per_display"
             android:theme="@style/Theme.PianoShelf.Settings" />
 
-        <!-- 在线乐谱下载页面：URL 输入 + 推荐平台 + 下载进度 -->
         <activity
             android:name=".OnlineScoreActivity"
             android:exported="false"
@@ -98,7 +88,6 @@
             android:theme="@style/Theme.PianoShelf.Settings"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout" />
 
-        <!-- Mutopia 应用内分类目录浏览（作曲家/乐器/风格 3 维度 → 作品 → 下载） -->
         <activity
             android:name=".InAppBrowseActivity"
             android:exported="false"
@@ -106,7 +95,6 @@
             android:theme="@style/Theme.PianoShelf.Settings"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout" />
 
-        <!-- 平台内置 WebView 浏览器：IMSLP / MuseScore / OpenScore 等，拦截 MusicXML 下载 -->
         <activity
             android:name=".PlatformWebViewActivity"
             android:exported="false"
@@ -114,11 +102,6 @@
             android:theme="@style/Theme.PianoShelf.Settings"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|screenLayout" />
 
-        <!--
-            FileProvider: exposes specific files (e.g. external storage .xml/.mxl)
-            to GraphicsActivity as content:// URIs (avoids FileUriExposedException
-            on Android 7.0 Nougat and above).
-        -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.rojama.pianoshelf.fileprovider"

@@ -24,6 +24,17 @@
     <string name="browse_scoped_storage_note">Because of Scoped Storage (Android 11+) the tree view only shows the files this app can see. Use the system picker for the full device.</string>
     <string name="browse_no_matching_files">No .xml or .mxl MusicXML files were found on this device.</string>
 
+    <!-- Root directory access (MANAGE_EXTERNAL_STORAGE) -->
+    <string name="browse_btn_browse_root">Browse root directory…</string>
+    <string name="browse_btn_continue_root">Continue browsing /storage/emulated/0</string>
+    <string name="browse_root_permission_required">To browse /storage/emulated/0 directly, PianoShelf needs "All files access" permission. Tap below to enable it in system settings.</string>
+    <string name="browse_root_go_settings">Grant permission in Settings</string>
+    <string name="browse_root_permission_granted">All files access granted. Now browsing /storage/emulated/0…</string>
+    <string name="browse_root_permission_denied">Permission not granted. You can still use the system file picker above.</string>
+    <string name="browse_root_browsing">Browsing: %1$s</string>
+    <string name="browse_root_toast_listing">Listing device files…</string>
+    <string name="browse_root_failed">Cannot list directory. Please grant "All files access" permission.</string>
+
     <string name="dis_back_root">Go to root directory</string>
     <string name="dis_back_up">Go up: %s</string>
 

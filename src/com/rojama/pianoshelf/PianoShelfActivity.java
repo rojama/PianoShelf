@@ -13,10 +13,12 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.text.TextUtils;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.LinearLayout;
 import android.widget.TabHost;
 import android.widget.TabWidget;
@@ -28,6 +30,8 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 
 import java.io.File;
 import java.io.InputStream;
@@ -72,6 +76,7 @@ public class PianoShelfActivity extends AppCompatActivity {
 	private static final int REQ_LEGACY_STORAGE = 1000;
 	public  static final int REQ_OPEN_MUSICXML_FILE = 1010;
 	public  static final int REQ_OPEN_MUSICXML_TREE = 1011;
+	public  static final int REQ_MANAGE_ALL_FILES = 1012;
 
 	public TabHost mTabHost = null;
 	public TabWidget mTabWidget = null;
@@ -84,6 +89,13 @@ public class PianoShelfActivity extends AppCompatActivity {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
+
+		// --- HyperOS 3 / MIUI 状态栏高度适配 ---
+		// 小米 HyperOS 3 (Android 14/15) 上 fitsSystemWindows 可能因主题层级原因
+		// 没有正确传递到 TabHost 内部，导致内容被状态栏遮挡。
+		// 这里手动获取状态栏高度并应用为根容器的顶部 padding。
+		applyStatusBarInsets();
+
 		try {
 			dbhelp = new DatabaseHelper(this);
 
@@ -181,6 +193,18 @@ public class PianoShelfActivity extends AppCompatActivity {
 	@Override
 	public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
 		super.onActivityResult(requestCode, resultCode, data);
+
+		// MANAGE_EXTERNAL_STORAGE 授权回来
+		if (requestCode == REQ_MANAGE_ALL_FILES) {
+			if (isExternalStorageManager()) {
+				Toast.makeText(this, R.string.browse_root_permission_granted, Toast.LENGTH_SHORT).show();
+				if (tbl != null) tbl.refreshForCurrentAccessMode();
+			} else {
+				Toast.makeText(this, R.string.browse_root_permission_denied, Toast.LENGTH_LONG).show();
+			}
+			return;
+		}
+
 		if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) return;
 		Uri uri = data.getData();
 		try {
@@ -233,6 +257,99 @@ public class PianoShelfActivity extends AppCompatActivity {
 			if (tbl != null) tbl.refreshForCurrentAccessMode();
 			if (trl != null) trl.getFileDir();
 			if (tfl != null) tfl.getFileDir();
+		}
+	}
+
+	// -------------------------------------------------------------------
+	// MANAGE_EXTERNAL_STORAGE (Android 11+ 根目录访问)
+	// -------------------------------------------------------------------
+
+	/**
+	 * 检查是否已获得"所有文件访问权限"
+	 */
+	@SuppressWarnings("deprecation")
+	public boolean isExternalStorageManager() {
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false;
+		try {
+			return Environment.isExternalStorageManager();
+		} catch (Throwable t) {
+			return false;
+		}
+	}
+
+	/**
+	 * 适配 HyperOS 3 / MIUI 状态栏高度。
+	 *
+	 * 小米 HyperOS 3 基于 Android 14/15，WindowInsets 在某些主题下
+	 * 无法正确穿透到 TabHost/FrameLayout 内部。这里手动获取状态栏高度
+	 * 并通过 ViewCompat.setOnApplyWindowInsetsListener + 资源兜底方案
+	 * 保证内容不被状态栏遮挡。
+	 */
+	private void applyStatusBarInsets() {
+		View rootView = findViewById(android.R.id.content);
+		if (rootView == null) return;
+
+		// 方案 1：使用 WindowInsetsCompat（AndroidX）动态获取状态栏高度
+		ViewCompat.setOnApplyWindowInsetsListener(rootView, (v, insets) -> {
+			int statusBarHeight = insets.getInsets(WindowInsetsCompat.Type.statusBars()).top;
+			if (statusBarHeight > 0) {
+				applyTopPadding(statusBarHeight);
+			}
+			return insets;
+		});
+
+		// 方案 2：同步兜底 —— 直接从系统资源读取状态栏高度
+		// 部分 HyperOS 版本在 onCreate 时还没有 dispatch insets，
+		// 所以我们用资源值作为初始 padding，确保至少不会遮挡
+		int statusBarHeight = getStatusBarHeight();
+		if (statusBarHeight > 0) {
+			applyTopPadding(statusBarHeight);
+		}
+	}
+
+	/** 从系统 dimen 资源获取状态栏高度（兜底方案） */
+	private int getStatusBarHeight() {
+		int resourceId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+		if (resourceId > 0) {
+			try {
+				return getResources().getDimensionPixelSize(resourceId);
+			} catch (Throwable ignore) {}
+		}
+		// 默认值：24dp，适配大多数设备
+		float density = getResources().getDisplayMetrics().density;
+		return (int) (24 * density + 0.5f);
+	}
+
+	/** 给根内容容器设置顶部 padding，避免状态栏遮挡 */
+	private void applyTopPadding(int top) {
+		ViewGroup contentRoot = findViewById(android.R.id.content);
+		if (contentRoot != null && contentRoot.getChildCount() > 0) {
+			// setInflate() 后 contentRoot 的第一个子 View 就是 main.xml 的根 LinearLayout
+			// 直接给它加顶部 padding 即可避免状态栏遮挡
+			View mainRoot = contentRoot.getChildAt(0);
+			mainRoot.setPadding(mainRoot.getPaddingLeft(), top,
+					mainRoot.getPaddingRight(), mainRoot.getPaddingBottom());
+		}
+	}
+
+	/**
+	 * 跳转到系统设置页面请求"所有文件访问权限"
+	 * 用户在系统设置里勾选后，会自动回到本 Activity
+	 */
+	public void requestManageExternalStorage() {
+		if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return;
+		try {
+			Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+			intent.setData(Uri.parse("package:" + getPackageName()));
+			startActivityForResult(intent, REQ_MANAGE_ALL_FILES);
+		} catch (Throwable t) {
+			// 部分 ROM 不支持 ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION，降级到通用页
+			try {
+				Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+				startActivityForResult(intent, REQ_MANAGE_ALL_FILES);
+			} catch (Throwable t2) {
+				Toast.makeText(this, R.string.browse_root_failed, Toast.LENGTH_LONG).show();
+			}
 		}
 	}
 

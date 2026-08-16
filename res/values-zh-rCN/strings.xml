@@ -16,6 +16,17 @@
 	<string name="browse_btn_open_dir">选择目录…</string>
 	<string name="browse_scoped_storage_note">由于 Android 11+ 的 Scoped Storage 分区存储机制，目录树仅显示本应用可直接访问到的文件。要看全机文件请使用系统选择器。</string>
 	<string name="browse_no_matching_files">设备内未搜索到任何 .xml / .mxl 格式乐谱文件。</string>
+
+	<!-- 根目录访问（MANAGE_EXTERNAL_STORAGE） -->
+	<string name="browse_btn_browse_root">浏览根目录…</string>
+	<string name="browse_btn_continue_root">继续浏览 /storage/emulated/0</string>
+	<string name="browse_root_permission_required">要直接浏览 /storage/emulated/0，便携乐谱需要「所有文件访问权限」。请点击下方按钮在系统设置中授权。</string>
+	<string name="browse_root_go_settings">前往系统设置授权</string>
+	<string name="browse_root_permission_granted">已获得所有文件访问权限，正在浏览 /storage/emulated/0…</string>
+	<string name="browse_root_permission_denied">未获得权限，您仍可以使用上方的系统文件选择器。</string>
+	<string name="browse_root_browsing">当前浏览：%1$s</string>
+	<string name="browse_root_toast_listing">正在列出设备文件…</string>
+	<string name="browse_root_failed">无法列出目录，请在系统设置中授予「所有文件访问权限」。</string>
 	<string name="dis_back_root">根目录</string>
 	<string name="dis_back_up">上级目录[%s]</string>
 	<string name="menu_online_score">在线乐谱</string>
