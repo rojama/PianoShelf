@@ -81,23 +81,12 @@ public class SymbolPool {
 		DebugLog.d(TAG, "SymbolPool 构造 id=" + id + " 开始加载资源");
 
 		Resources res = context.getResources();
-			int xmlIndex = R.xml.tex_default;
-			int pngIndex = R.drawable.tex_default;
-			if (id.equals("default")) {
-				xmlIndex = R.xml.tex_default;
-				pngIndex = R.drawable.tex_default;
-			}
-			DebugLog.d(TAG, "getDrawable(" + pngIndex + ") type="
-					+ (res.getResourceTypeName(pngIndex))
-					+ " name=" + (res.getResourceEntryName(pngIndex)));
-			BitmapDrawable bmpDraw = (BitmapDrawable) res.getDrawable(pngIndex);
-			if (bmpDraw == null) {
-				throw new FileNotFoundException("R.drawable.tex_default 返回 null，资源不存在或无效");
-			}
-			Bitmap bitmap = bmpDraw.getBitmap();
-			if (bitmap == null) {
-				throw new FileNotFoundException("tex_default bitmap 为 null");
-			}
+		int xmlIndex = R.xml.tex_default;
+		int pngIndex = R.drawable.tex_default;
+		if (id.equals("default")) {
+			xmlIndex = R.xml.tex_default;
+			pngIndex = R.drawable.tex_default;
+		}
 		// TODO 增加样式
 
 		try {
@@ -111,8 +100,17 @@ public class SymbolPool {
 			
 			
 			DebugLog.v(TAG, "  [2/3] 获取 R.drawable.tex_default 位图 + R.xml.tex_default 解析器");
+			DebugLog.d(TAG, "        pngIndex=" + pngIndex
+					+ "  type=" + res.getResourceTypeName(pngIndex)
+					+ "  name=" + res.getResourceEntryName(pngIndex));
 			BitmapDrawable bmpDraw = (BitmapDrawable) res.getDrawable(pngIndex);
+			if (bmpDraw == null) {
+				throw new FileNotFoundException("R.drawable.tex_default 返回 null，资源不存在或无效");
+			}
 			Bitmap bitmap = bmpDraw.getBitmap();
+			if (bitmap == null) {
+				throw new FileNotFoundException("tex_default bitmap 为 null");
+			}
 			int bitmapWidth = bitmap.getWidth();
 			int bitmapHeight = bitmap.getHeight();
 			DebugLog.d(TAG, "        tex_default.png 尺寸=" + bitmapWidth + "x" + bitmapHeight
@@ -197,6 +195,14 @@ public class SymbolPool {
 		this.commonSymbolPool = new CommonSymbolPool();
 		this.commonSymbolPool.update(this);
 		DebugLog.i(TAG, "SymbolPool(\"" + id + "\") 最终 symbols 数=" + symbols.size());
+	}
+
+	/**
+	 * 返回当前装载的音乐符号总数（≈tex_default.xml中 texture 元素数量）。
+	 * 若 hashtable 尚未初始化返回 -1。
+	 */
+	public int getSymbolCount() {
+		return symbols == null ? -1 : symbols.size();
 	}
 
 	public Symbol getSymbol(String id) {
