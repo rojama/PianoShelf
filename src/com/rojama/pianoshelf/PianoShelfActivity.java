@@ -93,6 +93,10 @@ public class PianoShelfActivity extends AppCompatActivity {
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.main);
+		DebugLog.ensureInitialized(this);
+		DebugLog.i(TAG, "========== PianoShelfActivity.onCreate 启动 ==========");
+		DebugLog.i(TAG, "Build.VERSION.SDK_INT=" + Build.VERSION.SDK_INT
+				+ "  DEVICE=" + Build.DEVICE + "  MODEL=" + Build.MODEL + "  MANUFACTURER=" + Build.MANUFACTURER);
 
 		// --- HyperOS 3 / MIUI 状态栏高度适配 ---
 		applyStatusBarInsets();
@@ -403,6 +407,9 @@ public class PianoShelfActivity extends AppCompatActivity {
 	@Override
 	public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
 		super.onActivityResult(requestCode, resultCode, data);
+		DebugLog.i(TAG, "onActivityResult  rc=" + requestCode + "  resultCode=" + resultCode
+				+ "  data=" + (data == null ? "null" : data));
+		DebugLog.d(TAG, "  extras=" + dumpBundle(data == null ? null : data.getExtras()));
 
 		// MANAGE_EXTERNAL_STORAGE 授权回来
 		if (requestCode == REQ_MANAGE_ALL_FILES) {
@@ -415,32 +422,70 @@ public class PianoShelfActivity extends AppCompatActivity {
 			return;
 		}
 
-		if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) return;
+		if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) {
+			DebugLog.w(TAG, "onActivityResult 提前 return: " +
+					"resultCode!=" + Activity.RESULT_OK + " 或 data==null 或 data.getData()==null");
+			return;
+		}
 		Uri uri = data.getData();
 		try {
 			if (requestCode == REQ_OPEN_MUSICXML_TREE
 					&& Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+				DebugLog.i(TAG, "SAF 目录授权：REQ_OPEN_MUSICXML_TREE  uri=" + uri);
 				// 持久化该目录授权
 				int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION
 						| Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
 				try {
 					getContentResolver().takePersistableUriPermission(uri, takeFlags);
-				} catch (Throwable ignored) {}
+					DebugLog.i(TAG, "  takePersistableUriPermission 成功 flags=" + takeFlags);
+				} catch (Throwable t) {
+					DebugLog.w(TAG, "  takePersistableUriPermission 失败（非持久化）", t);
+				}
 				if (tbl != null) tbl.bindToDocumentTree(uri);
 				return;
 			}
 			if (requestCode == REQ_OPEN_MUSICXML_FILE) {
+				DebugLog.i(TAG, "SAF 单文件：REQ_OPEN_MUSICXML_FILE  uri=" + uri
+						+ "  scheme=" + uri.getScheme() + "  mime=" + getContentResolver().getType(uri));
 				String openedPath = SafeFileResolver.materializeToCacheFile(this, uri);
+				DebugLog.i(TAG, "  materializeToCacheFile => " + openedPath);
 				if (openedPath == null) {
 					Toast.makeText(this, R.string.info_open_err, Toast.LENGTH_LONG).show();
 					return;
 				}
-				if (dbhelp != null) dbhelp.insertRecentItem(openedPath);
+				if (dbhelp != null) {
+					try {
+						dbhelp.insertRecentItem(openedPath);
+						DebugLog.d(TAG, "  recent DB 插入成功");
+					} catch (Throwable t) {
+						DebugLog.w(TAG, "  recent DB 插入失败", t);
+					}
+				}
 				TabBrowseList.launchGraphicsActivity(this, new File(openedPath));
 			}
 		} catch (Throwable t) {
+			DebugLog.e(TAG, "onActivityResult 异常", t);
 			Toast.makeText(this, getString(R.string.info_open_err) + " " + t.getMessage(),
 					Toast.LENGTH_LONG).show();
+		}
+	}
+
+	/** 把 bundle 所有 key-val 打印出来（调试用）。null-safe。 */
+	private static String dumpBundle(android.os.Bundle b) {
+		if (b == null) return "(no extras)";
+		try {
+			StringBuilder sb = new StringBuilder(512).append('{');
+			boolean first = true;
+			for (String k : b.keySet()) {
+				if (!first) sb.append(", ");
+				first = false;
+				Object v = b.get(k);
+				sb.append(k).append('=').append(v == null ? "null" : v.toString());
+			}
+			sb.append('}');
+			return sb.toString();
+		} catch (Throwable t) {
+			return t.toString();
 		}
 	}
 

@@ -38,28 +38,45 @@ public final class SafeFileResolver {
 	 */
 	@Nullable
 	public static String materializeToCacheFile(@NonNull Context context, @NonNull Uri uri) {
+		DebugLog.ensureInitialized(context);
 		try {
+			DebugLog.i("SafeResolver", "materializeToCacheFile  uri=" + uri + " scheme=" + uri.getScheme()
+					+ " mime=" + context.getContentResolver().getType(uri));
 			String ext = extractExtension(context, uri);
 			String filenameHash = sha256(uri.toString());
 			String cacheName = "p_" + filenameHash + (ext.isEmpty() ? "" : "." + ext);
 			File out = new File(context.getCacheDir(), cacheName);
+			DebugLog.d("SafeResolver", "  ext=" + ext + "  cachePath=" + out
+					+ "  已存在且非空=" + (out.exists() && out.length() > 0));
 
 			if (!out.exists() || out.length() == 0) {
 				InputStream in = null;
 				OutputStream os = null;
+				long copied = 0;
+				long t0 = System.currentTimeMillis();
 				try {
 					in = context.getContentResolver().openInputStream(uri);
-					if (in == null) return null;
+					DebugLog.d("SafeResolver", "  打开 ContentResolver.openInputStream => " + (in == null ? "null" : in.getClass()));
+					if (in == null) {
+						DebugLog.w("SafeResolver", "  openInputStream 返回 null");
+						return null;
+					}
 					os = new FileOutputStream(out);
-					copyStream(in, os);
+					copied = copyStream(in, os);
 				} finally {
 					closeQuiet(in);
 					closeQuiet(os);
 				}
+				long t1 = System.currentTimeMillis();
+				DebugLog.i("SafeResolver", "  复制完成  bytes=" + copied + "  耗时=" + (t1 - t0) + "ms");
 			}
-			if (out.exists() && out.length() > 0) return out.getAbsolutePath();
-			return null;
+			boolean ok = out.exists() && out.length() > 0;
+			DebugLog.i("SafeResolver", "  final: out.exists=" + out.exists()
+					+ " size=" + (out.exists() ? out.length() : -1)
+					+ " => return " + (ok ? out.getAbsolutePath() : "null"));
+			return ok ? out.getAbsolutePath() : null;
 		} catch (Throwable t) {
+			DebugLog.e("SafeResolver", "materializeToCacheFile 异常", t);
 			return null;
 		}
 	}
@@ -79,17 +96,25 @@ public final class SafeFileResolver {
 			if (c != null) try { c.close(); } catch (Throwable ignore) {}
 		}
 		if (name == null) name = uri.getLastPathSegment();
+		DebugLog.d("SafeResolver", "  extractExtension => DISPLAY_NAME/lastSegment=" + name);
 		if (name == null) return "";
 		int dot = name.lastIndexOf('.');
 		if (dot < 0 || dot == name.length() - 1) return "";
-		return name.substring(dot + 1);
+		String ext = name.substring(dot + 1);
+		DebugLog.d("SafeResolver", "    extension=" + ext);
+		return ext;
 	}
 
-	private static void copyStream(@NonNull InputStream in, @NonNull OutputStream out) throws IOException {
+	private static long copyStream(@NonNull InputStream in, @NonNull OutputStream out) throws IOException {
 		byte[] buf = new byte[8192];
 		int r;
-		while ((r = in.read(buf)) > 0) out.write(buf, 0, r);
+		long total = 0;
+		while ((r = in.read(buf)) > 0) {
+			out.write(buf, 0, r);
+			total += r;
+		}
 		out.flush();
+		return total;
 	}
 
 	private static void closeQuiet(@Nullable Object o) {

@@ -82,24 +82,53 @@ public final class MxlScorePartwise
   }
   
   public void paint(CommonTransfer ct) {
+	  com.rojama.pianoshelf.DebugLog.ensureInitialized(ct.context);
+	  long t0 = System.currentTimeMillis();
+	  com.rojama.pianoshelf.DebugLog.i("MxlPaint", "MxlScorePartwise.paint(ct) 开始：disPageNo=" + ct.disPageNo
+			  + "  parts=" + (parts == null ? 0 : parts.size()) + "  maxPage(已知)=" + ct.maxPage);
 	  ct.scorePartsNotes.clear();
 	  ct.oldPaintTransfer.clear();
 	  ct.oldPartID = null;
 	  
 	  PaintTransfer pt = new PaintTransfer();
 	  pt.ct = ct;
-	  
+
+	  com.rojama.pianoshelf.DebugLog.d("MxlPaint", "  → getScoreHeader().paint(pt) 绘制页眉/页脚/全局样式…");
+	  long t1 = System.currentTimeMillis();
 	  this.getScoreHeader().paint(pt);
+	  long t2 = System.currentTimeMillis();
+	  com.rojama.pianoshelf.DebugLog.i("MxlPaint", "     scoreHeader.paint 耗时=" + (t2 - t1) + "ms");
+
+	  int iter = 0;
 	  boolean run = true;
 	  while (run){
+		  iter++;
 		  //ct.oldPartID = null;
+		  long loopStart = System.currentTimeMillis();
+		  int partIdx = 0;
 		  for (MxlPart part : this.parts){
 			  run = part.print(ct);
+			  partIdx++;
 			  //ct.oldPartID = part.getID();
 		  }
+		  long loopEnd = System.currentTimeMillis();
+		  com.rojama.pianoshelf.DebugLog.d("MxlPaint", "    iter=" + iter
+				  + "  part.print 轮次 parts=" + partIdx + " 耗时=" + (loopEnd - loopStart)
+				  + "ms  继续下次循环?=" + run);
+		  if (iter > 2000) {
+			  com.rojama.pianoshelf.DebugLog.w("MxlPaint", "part.print 循环超过 2000 轮，强制 break（可能是 maxPage 计算 bug）");
+			  break;
+		  }
 	  }
+
 	  //打印页码
 	  ct.paint.setTextSize(10);
 //	  ct.drawText(ct.getDisPageNo()+"/"+ct.nowPage, ct.getPageWidth()-50, 50);
+	  long tn = System.currentTimeMillis();
+	  com.rojama.pianoshelf.DebugLog.i("MxlPaint", "MxlScorePartwise.paint 完成  总耗时=" + (tn - t0)
+			  + "ms  最终 maxPage=" + ct.maxPage
+			  + "  scorePartsNotes 收集了 " + ct.scorePartsNotes.size() + " 个声部"
+			  + "  scoreParts.size=" + ct.scoreParts.size()
+			  + "  最终 bitmap 宽高=" + (ct.bitmap == null ? "null" : (ct.bitmap.getWidth() + "x" + ct.bitmap.getHeight())));
   }
 }

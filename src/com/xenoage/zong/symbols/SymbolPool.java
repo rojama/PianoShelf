@@ -22,6 +22,7 @@ import android.graphics.Bitmap.Config;
 import android.graphics.PorterDuff.Mode;
 import android.graphics.drawable.BitmapDrawable;
 
+import com.rojama.pianoshelf.DebugLog;
 import com.rojama.pianoshelf.R;
 import com.xenoage.util.error.Err;
 import com.xenoage.util.error.ErrorLevel;
@@ -30,6 +31,7 @@ import com.xenoage.zong.symbols.common.CommonSymbolPool;
 import com.xenoage.zong.symbols.loader.SVGSymbolLoader;
 
 public class SymbolPool {
+	private static final String TAG = "SymbolPool";
 	private String id;
 	private Hashtable<String, Symbol> symbols;
 	private CommonSymbolPool commonSymbolPool;
@@ -50,7 +52,17 @@ public class SymbolPool {
 	}
 
 	public static SymbolPool loadDefault(Context context) {
-		return load("default", context);
+		DebugLog.i(TAG, "loadDefault(id=default) 开始…");
+		long t0 = System.currentTimeMillis();
+		SymbolPool sp = load("default", context);
+		long t1 = System.currentTimeMillis();
+		if (sp == null) {
+			DebugLog.e(TAG, "loadDefault 返回 null（这是致命错误，乐谱符号会全空）");
+		} else {
+			DebugLog.i(TAG, "loadDefault 完成 耗时=" + (t1 - t0) + "ms  装载 symbols 数量="
+					+ (sp.symbols == null ? -1 : sp.symbols.size()));
+		}
+		return sp;
 	}
 
 	private SymbolPool() {
@@ -63,6 +75,7 @@ public class SymbolPool {
 		this.id = id;
 		this.symbols = new Hashtable<String, Symbol>(0);
 		this.commonSymbolPool = new CommonSymbolPool();
+		DebugLog.d(TAG, "SymbolPool 构造 id=" + id + " 开始加载资源");
 
 		Resources res = context.getResources();
 		int xmlIndex = R.xml.tex_default;
@@ -74,6 +87,7 @@ public class SymbolPool {
 		// TODO 增加样式
 
 		try {
+			DebugLog.v(TAG, "  [1/3] 创建 WarningSymbol");
 			Bitmap warningBitmap = Bitmap.createBitmap(10, 40, Config.ARGB_8888);
 			for (int i=0;i<10;i++)
 				warningBitmap.setPixel(i, 20, Color.RED);
@@ -82,10 +96,13 @@ public class SymbolPool {
 			this.warningSymbol.setBitmap(warningBitmap);
 			
 			
+			DebugLog.v(TAG, "  [2/3] 获取 R.drawable.tex_default 位图 + R.xml.tex_default 解析器");
 			BitmapDrawable bmpDraw = (BitmapDrawable) res.getDrawable(pngIndex);
 			Bitmap bitmap = bmpDraw.getBitmap();
 			int bitmapWidth = bitmap.getWidth();
 			int bitmapHeight = bitmap.getHeight();
+			DebugLog.d(TAG, "        tex_default.png 尺寸=" + bitmapWidth + "x" + bitmapHeight
+					+ " bitmapScaleFactor=" + (bitmapWidth == 512 ? "0.5f (旧 512 纹素)" : "1.0f"));
 			
 			XmlResourceParser xpp = res.getXml(xmlIndex);
 			SVGSymbolLoader loader = new SVGSymbolLoader();
@@ -98,7 +115,10 @@ public class SymbolPool {
 			Bitmap bm = Bitmap.createBitmap(800 , 2500 , Config.ARGB_8888);  
 	        Canvas canvas_symbol = new  Canvas(bm);  
 			**/
-			
+
+			int loaded = 0;
+			int skipped = 0;
+			long texStart = System.currentTimeMillis();
 			while (eventType != XmlPullParser.END_DOCUMENT) {
 				if (eventType == XmlPullParser.START_TAG) {
 					if (xpp.getName().equals("texture")) {
@@ -126,31 +146,16 @@ public class SymbolPool {
 								* Float.parseFloat(xpp.getAttributeValue(5))));
 						symbol.setBitmap(bitmapSymbol);						
 						this.symbols.put(symbol.getID(), symbol);
-						
-						
-						/**
-						//生成总图用
-						Paint paint = new Paint();
-						paint.setColor(Color.BLACK);						
-						if (x+bitmapSymbol.getWidth()+110 > 750) {
-							x = 50;
-							y += maxh+80;
-							maxh =0;
-							
-						}												
-						canvas_symbol.drawBitmap(bitmapSymbol, x, y, paint);
-						paint.setTextSize(10);
-						canvas_symbol.drawText(xpp.getAttributeValue(0), x, y+40+bitmapSymbol.getHeight(), paint);
-						
-						if (bitmapSymbol.getHeight()>maxh){
-							maxh = bitmapSymbol.getHeight();
-						}
-						x += bitmapSymbol.getWidth()+110;
-						**/
+						loaded++;
+					} else {
+						skipped++;
 					}
 				}
 				eventType = xpp.next();
 			}// eof-while
+			long texEnd = System.currentTimeMillis();
+			DebugLog.i(TAG, "  [3/3] 解析 tex_default.xml texture 元素完成  loaded=" + loaded
+					+ "  skipped-tags=" + skipped + "  total耗时=" + (texEnd - texStart) + "ms");
 			
 			/**
 			//生成总图用
@@ -169,12 +174,15 @@ public class SymbolPool {
 	        **/
 	        
 		} catch (Exception ex) {
+			DebugLog.e(TAG, "SymbolPool 构造抛出异常，将交给 Err.err 上报", ex);
 			ex.printStackTrace();
 			Err.err().report(ErrorLevel.Fatal, "Error_CouldNotLoadSymbolPool", ex);
 		}
 
+		DebugLog.d(TAG, "commonSymbolPool.update(this) 开始构建 common symbol 映射");
 		this.commonSymbolPool = new CommonSymbolPool();
-		this.commonSymbolPool.update(this);		
+		this.commonSymbolPool.update(this);
+		DebugLog.i(TAG, "SymbolPool(\"" + id + "\") 最终 symbols 数=" + symbols.size());
 	}
 
 	public Symbol getSymbol(String id) {

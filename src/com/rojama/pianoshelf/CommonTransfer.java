@@ -20,6 +20,8 @@ import com.xenoage.zong.musicxml.types.MxlScorePart;
 import com.xenoage.zong.symbols.SymbolPool;
 
 public class CommonTransfer {
+	private static final String TAG = "CommonTransfer";
+
 	public final int PART_NAME_SIZE = 15;
 	public final int SPACE = 5;
 	public final int NOTE_LINE_HIGHT = 34;
@@ -70,21 +72,44 @@ public class CommonTransfer {
 		} else {
 			isUpright = true;
 		}
+		DebugLog.i(TAG, "setScreen w=" + w + " h=" + h + " isUpright=" + isUpright);
 	}
 
 	public void setPage(float w, float h) {
+		DebugLog.i(TAG, "setPage pageWidth=" + w + " pageHeight=" + h + " 当前bitmap=" + bitmap);
 		this.pageHeight = h;
 		this.pageWidth = w;
 		if (bitmap == null) {
-			bitmap = Bitmap.createBitmap(Math.round(pageWidth), Math.round(pageHeight),
-					Config.RGB_565);
+			int wpx = Math.max(1, Math.round(pageWidth));
+			int hpx = Math.max(1, Math.round(pageHeight));
+			DebugLog.i(TAG, "Bitmap 尚未创建 → createBitmap " + wpx + "x" + hpx + " RGB_565（需要 " + (wpx*hpx*2/1024) + " KB）");
+			long t0 = System.currentTimeMillis();
+			bitmap = Bitmap.createBitmap(wpx, hpx, Config.RGB_565);
+			long t1 = System.currentTimeMillis();
+			DebugLog.i(TAG, "createBitmap 完成 耗时=" + (t1 - t0) + "ms  bitmap.rowBytes="
+					+ (bitmap == null ? "null" : bitmap.getRowBytes())
+					+ "  byteCount=" + (bitmap == null ? "null" : bitmap.getByteCount()));
+		} else {
+			DebugLog.d(TAG, "bitmap 已存在，复用  width=" + bitmap.getWidth() + " height=" + bitmap.getHeight());
 		}
+		long t0 = System.currentTimeMillis();
 		canvas = new Canvas(bitmap);
-		canvas.drawColor(Color.parseColor(appPrefs.getString("background", "white")));
-		// this.setAutoZoom();
+		String bgColor = "white";
+		try { bgColor = appPrefs == null ? "white" : appPrefs.getString("background", "white"); } catch (Throwable ignore) {}
+		try {
+			canvas.drawColor(Color.parseColor(bgColor));
+			DebugLog.d(TAG, "Canvas 初始化，刷背景色=" + bgColor + "  canvas.isHardwareAccelerated=" + canvas.isHardwareAccelerated());
+		} catch (Throwable t) {
+			DebugLog.e(TAG, "canvas.drawColor(background) 失败 bg=" + bgColor, t);
+			throw t;
+		}
+		long t1 = System.currentTimeMillis();
+		DebugLog.i(TAG, "setPage 收尾 new Canvas + drawColor 耗时=" + (t1 - t0) + "ms");
 	}
 
 	public void setAutoZoom() {
+		DebugLog.d(TAG, "setAutoZoom: page=" + pageWidth + "x" + pageHeight
+				+ " screen=" + screenWidth + "x" + screenHeight);
 		if (this.pageWidth > 0 && this.screenWidth > 0) {
 			this.zoomX = screenWidth / pageWidth;
 		}
@@ -94,6 +119,8 @@ public class CommonTransfer {
 		// 等比例
 		zoomY = zoomX > zoomY ? zoomX : zoomY;
 		zoomX = zoomY;
+		DebugLog.i(TAG, "setAutoZoom 最终 zoomX=" + zoomX + " zoomY=" + zoomY
+				+ " (canvas.scale 之后，乐谱放大比例)");
 		canvas.scale(zoomX, zoomY);
 	}
 
@@ -107,6 +134,7 @@ public class CommonTransfer {
 
 
 	public void setDisPageNo(int disPageNo) {
+		DebugLog.d(TAG, "setDisPageNo " + disPageNo + "（当前已知 maxPage=" + maxPage + "）");
 		this.disPageNo = disPageNo;
 	}
 

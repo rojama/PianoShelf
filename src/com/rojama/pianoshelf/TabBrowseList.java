@@ -358,6 +358,13 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 	/** Safe cross-version launcher for GraphicsActivity via FileProvider. */
 	static void launchGraphicsActivity(Context context, File file) {
 		try {
+			DebugLog.ensureInitialized(context);
+			DebugLog.i("launch",
+					"launchGraphicsActivity 被调用  file=" + file
+					+ "  exists=" + file.exists()
+					+ "  canRead=" + file.canRead()
+					+ "  isFile=" + file.isFile()
+					+ "  size=" + (file.isFile() ? file.length() : -1));
 			Uri uri = FileProvider.getUriForFile(context, FILEPROVIDER_AUTH, file);
 			Intent intent = new Intent();
 			intent.setDataAndType(uri, "application/vnd.recordare.musicxml");
@@ -367,8 +374,14 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 			// 直接传文件路径，GraphicsActivity 优先读这个 extra，
 			// 避免 content:// URI → new File(new URI(...)) 的 IllegalArgumentException
 			intent.putExtra(GraphicsActivity.EXTRA_FILE_PATH, file.getAbsolutePath());
+			DebugLog.d("launch",
+					"  组装完成  uri=" + uri
+					+ "  EXTRA_FILE_PATH=" + file.getAbsolutePath()
+					+ "  cls=GraphicsActivity  startActivity 前");
 			context.startActivity(intent);
+			DebugLog.i("launch", "startActivity(intent) 正常返回");
 		} catch (Throwable t) {
+			DebugLog.e("launch", "launchGraphicsActivity 抛异常", t);
 			Toast.makeText(context, context.getString(R.string.info_canot_read),
 					Toast.LENGTH_SHORT).show();
 		}
