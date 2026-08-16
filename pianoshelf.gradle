@@ -5,14 +5,16 @@ apply plugin: 'com.android.application'
 
 android {
     namespace 'com.rojama.pianoshelf'
-    compileSdk 34
+    // Android 16 = API 36.1（2026-08 当前稳定点版本）
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.rojama.pianoshelf"
         minSdk 21
-        targetSdk 34
-        versionCode 3
-        versionName "2.1.0-online-catalog"
+        // targetSdk = 36 声明已正式针对 Android 16（API 36）适配
+        targetSdk 36
+        versionCode 4
+        versionName "2.2.0-android16"
     }
 
     // Release 签名配置：优先读取环境变量（CI 通过 GitHub Secrets 注入），
