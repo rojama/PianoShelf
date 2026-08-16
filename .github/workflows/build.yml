@@ -155,35 +155,44 @@ jobs:
             # $1 = build type: debug|release
             local type="$1"
             local dir="build/outputs/apk/${type}"
-            local src=""
             # AGP 单模块输出默认名 app-${type}.apk；我们不假定，直接按目录找
-            local candidate=$(find "$dir" -maxdepth 2 -type f -name "*.apk" | head -n1 || true)
+            local candidate
+            candidate=$(find "$dir" -maxdepth 2 -type f -name "*.apk" | head -n1 || true)
             if [ -z "$candidate" ]; then
               echo "::error::No .apk found under $dir. Listing:"
               ls -R "$dir" || true
               exit 1
             fi
-            src="$candidate"
             local final_name="PianoShelf-${type}-${SHORT_SHA}.apk"
-            mv "$src" "$dir/$final_name"
+            if [ "$candidate" != "$dir/$final_name" ]; then
+              mv "$candidate" "$dir/$final_name"
+            fi
             ( cd "$dir" && sha256sum "$final_name" > "$final_name.sha256" )
-            echo "${type}_dir=$dir"
-            echo "${type}_src=$dir/$final_name"
-            echo "${type}_name=$final_name"
-            echo "${type}_sha=$dir/$final_name.sha256"
+            # 注意：同一个 step 里不能用 steps.meta.outputs.* 引用自己，
+            # 所以同时写入 GitHub outputs 与 shell 环境，后面 cat/ls 直接用变量。
+            {
+              echo "${type}_dir=$dir"
+              echo "${type}_src=$dir/$final_name"
+              echo "${type}_name=$final_name"
+              echo "${type}_sha=$dir/$final_name.sha256"
+            } >> "$GITHUB_OUTPUT"
+            printf '%s' "$dir/$final_name"       > "/tmp/_ps_${type}_src"
+            printf '%s' "$dir/$final_name.sha256" > "/tmp/_ps_${type}_sha"
+            printf '%s' "$final_name"             > "/tmp/_ps_${type}_name"
           }
 
-          {
-            locate_apk debug
-            locate_apk release
-          } >> "$GITHUB_OUTPUT"
+          locate_apk debug
+          locate_apk release
+
+          DEBUG_SRC="$(cat /tmp/_ps_debug_src)"; DEBUG_SHA="$(cat /tmp/_ps_debug_sha)"
+          REL_SRC="$(cat /tmp/_ps_release_src)"; REL_SHA="$(cat /tmp/_ps_release_sha)"
 
           echo "--- Debug APK ---"
-          cat "${{ steps.meta.outputs.debug_sha }}"
-          ls -la "${{ steps.meta.outputs.debug_src }}"
+          cat "$DEBUG_SHA"
+          ls -la "$DEBUG_SRC"
           echo "--- Release APK ---"
-          cat "${{ steps.meta.outputs.release_sha }}"
-          ls -la "${{ steps.meta.outputs.release_src }}"
+          cat "$REL_SHA"
+          ls -la "$REL_SRC"
 
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
