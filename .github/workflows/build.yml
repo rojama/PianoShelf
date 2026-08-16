@@ -27,8 +27,9 @@ concurrency:
 env:
   JAVA_VERSION: '17'
   JAVA_DISTRO: 'temurin'
-  ANDROID_COMPILE_SDK: 34
-  ANDROID_BUILD_TOOLS: 34.0.0
+  # Android 16 = API 36（2026-08 稳定），与本地 pianoshelf.gradle compileSdk/targetSdk=36 对齐
+  ANDROID_COMPILE_SDK: 36
+  ANDROID_BUILD_TOOLS: 36.1.0
   # 构建脚本会读取这些环境变量用于 release 签名（pianoshelf.gradle 内约定的名字）
   # 值通过 secrets.* 注入；未配置 secret 时 gradle 会 fallback 到 debug keystore。
   PIANOSHELF_KEYSTORE_FILE: ${{ github.workspace }}/.ci-keystore.jks
