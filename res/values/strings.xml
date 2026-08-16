@@ -29,6 +29,7 @@
     <string name="settings_section_subtitle">Settings</string>
 
     <string name="info_add_favorite">Added to favorites</string>
+    <string name="info_ok_dir">Directory added. Use root browse or file picker for now.</string>
     <string name="info_remove_favorite">Removed from favorites</string>
     <string name="info_canot_read">File cannot be read</string>
     <string name="info_not_exiet">File no longer exists</string>
