@@ -354,6 +354,16 @@ public final class MxlNote implements MxlMusicDataContent {
 		
 		// System.out.println(isSameX + "|" + pt.oldX + "|" + pt.lastNoteX);
 
+		// ====== 1) 先决定 staff 编号（默认 1，为 null 时兜底） ======
+		Integer staffNum = this.getStaff();
+		int staff = (staffNum == null) ? 1 : staffNum.intValue();
+
+		// ====== 2) 若这个 staff 没有谱号，默认给一个 G（nowClefType 为空是首个 measure 还没遇到 attributes/clef 时最常见的崩点） ======
+		if (!pt.nowClefType.containsKey(Integer.valueOf(staff))) {
+			DebugLog.w("MxlNote", "  staff=" + staff + " 无 clef 记录，兜底 ClefType.G（nowClefType.keys=" + pt.nowClefType.keySet() + "）");
+			pt.nowClefType.put(Integer.valueOf(staff), com.xenoage.zong.core.music.clef.ClefType.G);
+		}
+
 		// 画音符
 		if (this.getType() != null) {
 			MxlStemValue stemValue = MxlStemValue.None;
@@ -361,16 +371,6 @@ public final class MxlNote implements MxlMusicDataContent {
 			if (this.getStem() != null) {
 				stemValue = this.getStem().getValue();
 				stemPosition = this.getStem().getYPosition();
-			}
-
-			// ====== 1) 先决定 staff 编号（默认 1，为 null 时兜底） ======
-			Integer staffNum = this.getStaff();
-			int staff = (staffNum == null) ? 1 : staffNum.intValue();
-
-			// ====== 2) 若这个 staff 没有谱号，默认给一个 G（nowClefType 为空是首个 measure 还没遇到 attributes/clef 时最常见的崩点） ======
-			if (!pt.nowClefType.containsKey(Integer.valueOf(staff))) {
-				DebugLog.w("MxlNote", "  staff=" + staff + " 无 clef 记录，兜底 ClefType.G（nowClefType.keys=" + pt.nowClefType.keySet() + "）");
-				pt.nowClefType.put(Integer.valueOf(staff), com.xenoage.zong.core.music.clef.ClefType.G);
 			}
 
 			Symbol symbol = null;
@@ -401,22 +401,17 @@ public final class MxlNote implements MxlMusicDataContent {
 					DebugLog.w("MxlNote", "  note head symbol 为 null，跳过此 note（type=" + this.getType().type + "）");
 					break;
 				}
-				{
-					MxlPitch pitch = (MxlPitch) this.getContent().getFullNote().getContent();
-					com.xenoage.zong.core.music.clef.ClefType ct = pt.nowClefType.get(Integer.valueOf(staff));
-					if (ct == null || pitch == null || pitch.getPitch() == null) {
-						DebugLog.w("MxlNote", "  clef/pitch 缺一项，跳过绘制: clef=" + ct + " pitchObj=" + pitch + " getPitch()=" + (pitch == null ? "null" : pitch.getPitch()));
-						pt.oldX += symbol.getBitmap().getWidth() + pt.ct.SPACE;
-						break;
-					}
-					int line = ct.computeLinePosition(pitch.getPitch());
-					pt.oldY = 4 * 10 - line * 10 / 2;
-					pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + pt.oldY
-							- symbol.getTopToBase() + 1);
+				MxlPitch pitch = (MxlPitch) this.getContent().getFullNote().getContent();
+				com.xenoage.zong.core.music.clef.ClefType ct = pt.nowClefType.get(Integer.valueOf(staff));
+				if (ct == null || pitch == null || pitch.getPitch() == null) {
+					DebugLog.w("MxlNote", "  clef/pitch 缺一项，跳过绘制: clef=" + ct + " pitchObj=" + pitch + " getPitch()=" + (pitch == null ? "null" : pitch.getPitch()));
+					break;
+				}
+				int line = ct.computeLinePosition(pitch.getPitch());
+				pt.oldY = 4 * 10 - line * 10 / 2;
+				pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + pt.oldY
+						- symbol.getTopToBase() + 1);
 				
-				
-				
-
 				// 加线
 				if (line < 0) {
 					for (int i = -2; i >= line; i = i - 2) {
@@ -432,53 +427,57 @@ public final class MxlNote implements MxlMusicDataContent {
 					}
 				}
 
-				// 画辅助符号
-				for (MxlNotations notaion : this.getNotations()) {
-					for (MxlNotationsContent content : notaion.getElements()) {
-						switch (content.getNotationsContentType()) {
-						case CurvedLine:
-							PointF end = new PointF(pt.measureLeft + symbol.getBitmap().getWidth()
-									/ 2 + pt.oldX, pt.measureUp + pt.oldY);
-							MxlCurvedLine curvedLine = (MxlCurvedLine) content;
-							for (MxlCurvedLine lastCurvedLine : pt.lastCurvedLinePoint.keySet()) {
-								if (lastCurvedLine.getNumber() == curvedLine.getNumber()) {
-									switch (curvedLine.getType()) {
-									case Start:
-										pt.lastCurvedLinePoint.remove(lastCurvedLine);
-										break;
-									case Continue:
-									case Stop:
-										PointF start = pt.lastCurvedLinePoint.get(lastCurvedLine);
-										if (start.x <= end.x){
-											pt.drawDefaultBezier(start, end, stemValue);
-										}else{
-											PointF startM = new PointF();
-											startM.set(start);
-											startM.x = pt.getPageWidth()-pt.getMxlAllMargins().getRightMargin();
-											startM.y += (stemValue == MxlStemValue.Down)? -15:15;												
-											pt.drawDefaultBezier(start, startM, stemValue);
-											
-											PointF endM = new PointF();
-											endM.set(end);
-											endM.x = pt.getMxlAllMargins().getLeftMargin();
-											endM.y += (stemValue == MxlStemValue.Down)? -15:15;
-											pt.drawDefaultBezier(endM, end, stemValue);
+				// 画辅助符号（容错 try：单个 notation 出错不影响整段）
+				try {
+					for (MxlNotations notaion : this.getNotations()) {
+						for (MxlNotationsContent content : notaion.getElements()) {
+							switch (content.getNotationsContentType()) {
+							case CurvedLine:
+								PointF end = new PointF(pt.measureLeft + symbol.getBitmap().getWidth()
+										/ 2 + pt.oldX, pt.measureUp + pt.oldY);
+								MxlCurvedLine curvedLine = (MxlCurvedLine) content;
+								for (MxlCurvedLine lastCurvedLine : pt.lastCurvedLinePoint.keySet()) {
+									if (lastCurvedLine.getNumber() == curvedLine.getNumber()) {
+										switch (curvedLine.getType()) {
+										case Start:
+											pt.lastCurvedLinePoint.remove(lastCurvedLine);
+											break;
+										case Continue:
+										case Stop:
+											PointF start = pt.lastCurvedLinePoint.get(lastCurvedLine);
+											if (start.x <= end.x){
+												pt.drawDefaultBezier(start, end, stemValue);
+											}else{
+												PointF startM = new PointF();
+												startM.set(start);
+												startM.x = pt.getPageWidth()-pt.getMxlAllMargins().getRightMargin();
+												startM.y += (stemValue == MxlStemValue.Down)? -15:15;												
+												pt.drawDefaultBezier(start, startM, stemValue);
+												
+												PointF endM = new PointF();
+												endM.set(end);
+												endM.x = pt.getMxlAllMargins().getLeftMargin();
+												endM.y += (stemValue == MxlStemValue.Down)? -15:15;
+												pt.drawDefaultBezier(endM, end, stemValue);
+											}
+											pt.lastCurvedLinePoint.remove(lastCurvedLine);
+											break;
 										}
-										pt.lastCurvedLinePoint.remove(lastCurvedLine);
 										break;
 									}
-									break;
 								}
+								if (!pt.lastCurvedLinePoint.containsKey(curvedLine)
+										&& curvedLine.getType() != MxlStartStopContinue.Stop) {
+									pt.lastCurvedLinePoint.put(curvedLine, end);
+								}
+							case Dynamics:
+							case Articulations:
+								// TODO
 							}
-							if (!pt.lastCurvedLinePoint.containsKey(curvedLine)
-									&& curvedLine.getType() != MxlStartStopContinue.Stop) {
-								pt.lastCurvedLinePoint.put(curvedLine, end);
-							}
-						case Dynamics:
-						case Articulations:
-							// TODO
 						}
 					}
+				} catch (Throwable t) {
+					DebugLog.w("MxlNote", "  画 notations 出错（忽略，不影响后续音符）", t);
 				}
 
 				// 画符干
@@ -513,59 +512,64 @@ public final class MxlNote implements MxlMusicDataContent {
 					if (this.getBeams().size() > 0) {
 						// 画符梁
 						float beamX = beginX, beamY = stopY;
-						for (MxlBeam beam : this.getBeams()) {
-							switch (stemValue) {
-							case Up:
-								beamY += (beam.getNumber() - 1) * 10;
-								break;
-							case Down:
-								beamY -= (beam.getNumber() - 1) * 10;
-								break;
-							}
-							for (MxlBeam lastBeam : pt.lastBeamPoint.keySet()) {
-								if (lastBeam.hashCode() == beam.hashCode()) {
-									switch (beam.getValue()) {
-									case Begin:
-										pt.lastBeamPoint.remove(lastBeam);
-										break;
-									case Continue:
-									case End:
-										PointF point = pt.lastBeamPoint.get(lastBeam);
-										// 画粗点
-										for (int i = -1; i <= 1; i++) {
-											pt.drawLine(point.x, point.y + i, beamX, beamY + i);
-										}
-										pt.lastBeamPoint.remove(lastBeam);
-										break;
-									}
+						try {
+							for (MxlBeam beam : this.getBeams()) {
+								switch (stemValue) {
+								case Up:
+									beamY += (beam.getNumber() - 1) * 10;
+									break;
+								case Down:
+									beamY -= (beam.getNumber() - 1) * 10;
 									break;
 								}
+								for (MxlBeam lastBeam : pt.lastBeamPoint.keySet()) {
+									if (lastBeam.hashCode() == beam.hashCode()) {
+										switch (beam.getValue()) {
+										case Begin:
+											pt.lastBeamPoint.remove(lastBeam);
+											break;
+										case Continue:
+										case End:
+											PointF point = pt.lastBeamPoint.get(lastBeam);
+											// 画粗点
+											for (int i = -1; i <= 1; i++) {
+												pt.drawLine(point.x, point.y + i, beamX, beamY + i);
+											}
+											pt.lastBeamPoint.remove(lastBeam);
+											break;
+										}
+										break;
+									}
+								}
+								if (!pt.lastBeamPoint.containsKey(beam)
+										&& beam.getValue() != MxlBeamValue.End) {
+									pt.lastBeamPoint.put(beam, new PointF(beamX, beamY));
+								}
 							}
-							if (!pt.lastBeamPoint.containsKey(beam)
-									&& beam.getValue() != MxlBeamValue.End) {
-								pt.lastBeamPoint.put(beam, new PointF(beamX, beamY));
-							}
+						} catch (Throwable t) {
+							DebugLog.w("MxlNote", "  画符梁出错（忽略）", t);
 						}
 					} else if (pt.lastBeamPoint.isEmpty() && !isSameX) {
 						// 画符旗
-						symbol = pt.ct.symbolPool.getSymbol(CommonSymbol.NoteFlag);
-						for (int i = 0; i < MxlTypeValue.QUARTER.ordinal()
-								- this.getType().type.ordinal(); i++) {
-							float flagHight = symbol.getBitmap().getHeight()
-									- symbol.getTopToBase();
-							switch (stemValue) {
-							case Up:
-								pt.drawBitmap(symbol.getBitmap(), beginX, stopY + i * flagHight);
-								break;
-							case Down:
-								Matrix mx = new Matrix();
-								mx.setScale(1, -1); // 产生镜像
-								Bitmap newBitmap = Bitmap.createBitmap(symbol.getBitmap(), 0, 0,
-										symbol.getBitmap().getWidth(), symbol.getBitmap()
-												.getHeight(), mx, true);
-
-								pt.drawBitmap(newBitmap, beginX, stopY - (i + 2) * flagHight);
-								break;
+						Symbol flagSym = pt.ct.symbolPool.getSymbol(CommonSymbol.NoteFlag);
+						if (flagSym != null && flagSym.getBitmap() != null) {
+							for (int i = 0; i < MxlTypeValue.QUARTER.ordinal()
+									- this.getType().type.ordinal(); i++) {
+								float flagHight = flagSym.getBitmap().getHeight()
+										- flagSym.getTopToBase();
+								switch (stemValue) {
+								case Up:
+									pt.drawBitmap(flagSym.getBitmap(), beginX, stopY + i * flagHight);
+									break;
+								case Down:
+									Matrix mx = new Matrix();
+									mx.setScale(1, -1); // 产生镜像
+									Bitmap newBitmap = Bitmap.createBitmap(flagSym.getBitmap(), 0, 0,
+											flagSym.getBitmap().getWidth(), flagSym.getBitmap()
+													.getHeight(), mx, true);
+									pt.drawBitmap(newBitmap, beginX, stopY - (i + 2) * flagHight);
+									break;
+								}
 							}
 						}
 					}
@@ -661,5 +665,4 @@ public final class MxlNote implements MxlMusicDataContent {
 
 	}
 
-}
 }
