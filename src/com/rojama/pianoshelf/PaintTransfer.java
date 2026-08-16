@@ -77,11 +77,29 @@ public class PaintTransfer {
 	public Map<String, PaintTransfer> oldPaintTransfer = new HashMap<String, PaintTransfer>();
 
 	public Float getMeasureUp(Integer num) {
-		float meaup = this.measureUpAll.get(nowLine);
-		// meaup += this.getStaffDistance(1) + 4 * STAFF_LINE_SPACING;
+		Integer ln = (nowLine == null || nowLine < 1) ? 1 : nowLine;
+		Float raw = this.measureUpAll.get(ln);
+		// ===== NPE 兜底：measureUpAll 中不存在 nowLine 对应 key 时，按 systemTopDistance + (ln-1)*systemDistance 推算 =====
+		// 正常流程 measureUpAll 应由 MxlPrint 在 collect/render 阶段写入，这里防极端 case（如 XML 缺 print/new-system 节点）
+		if (raw == null) {
+			int staffH = (ct != null) ? (4 * ct.STAFF_LINE_SPACING) : 40;
+			float sysDist = (ct != null && ct.systemDistance != null) ? ct.systemDistance : staffH * 2f;
+			float topDist = (ct != null && ct.systemTopDistance != null) ? ct.systemTopDistance : staffH * 2f;
+			float topMargin = (ct != null && ct.getMxlAllMargins() != null && ct.getMxlAllMargins().getTopMargin() != null)
+					? ct.getMxlAllMargins().getTopMargin() : 0f;
+			float baseY = topDist + topMargin;
+			// nowLine=1 → 不加系统距离；nowLine>=2 → 每条 line 叠加系统距离+行高(单 staff 近似)
+			float fallback = baseY + Math.max(0, ln - 1) * (sysDist + staffH);
+			// 写入缓存，避免后续同一 line 重算（保持 nowPage=disPageNo 的渲染时一致）
+			this.measureUpAll.put(ln, fallback);
+			raw = fallback;
+		}
+		float meaup = raw;
 		int staffH = (ct != null) ? (4 * ct.STAFF_LINE_SPACING) : 40;
+		// staff 叠加：num=第几个 staff（不是总 staff 数），加 staff 间距 + 每个 staff 高
 		for (int i = 1; i < num; i++) {
-			meaup += getStaffDistance(i + 1) + staffH;
+			Float d = getStaffDistance(i + 1);
+			meaup += (d != null ? d : (staffH * 1.5f)) + staffH;
 		}
 		return meaup;
 	}
@@ -91,8 +109,11 @@ public class PaintTransfer {
 			return this.staffLayout.get(num);
 		} else if (this.staffLayout.containsKey(null)) {
 			return this.staffLayout.get(null);
-		} else {
+		} else if (this.ct != null && this.ct.systemDistance != null) {
 			return this.ct.systemDistance;
+		} else {
+			// 终极兜底：返回 1.5 倍行高（避免 null 导致调用方拆箱 NPE）
+			return (ct != null) ? (1.5f * 4 * ct.STAFF_LINE_SPACING) : 60f;
 		}
 	}
 
@@ -292,7 +313,9 @@ public class PaintTransfer {
 	}
 
 	public void printHand(boolean printTimeOnly) {
-		if (this.nowPage != this.ct.getDisPageNo())
+		// collect 阶段不 return：printClef/printKey/printTime 内部 drawBitmap 会被 collect 模式 short-circuit
+		// 但 getMeasureUp(line) 仍然需要执行（间接依赖 measureUpAll），并且 oldX 推进也要正常完成
+		if (!ct.collectAllNotesForPlayback && this.nowPage != this.ct.getDisPageNo())
 			return;
 
 		float w = 0;

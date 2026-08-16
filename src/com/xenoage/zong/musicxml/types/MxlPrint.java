@@ -125,7 +125,10 @@ public final class MxlPrint implements MxlMusicDataContent {
 		pt.oldX = 0;
 		pt.oldY = 0;
 
-		if (pt.nowPage != pt.ct.getDisPageNo())
+		// ===== 修复：collect 阶段不 return =====
+		// measureUpAll.put 在这里（line ~150）执行，return 掉会导致 measureUpAll 为空
+		// 然后 MxlNote.print -> getMeasureUp(getStaff()) 得到 null -> Float 拆箱 NPE
+		if (!pt.ct.collectAllNotesForPlayback && pt.nowPage != pt.ct.getDisPageNo())
 			return;
 
 		// 第一部分的第一节

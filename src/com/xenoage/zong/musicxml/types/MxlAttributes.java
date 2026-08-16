@@ -178,7 +178,10 @@ public final class MxlAttributes implements MxlMusicDataContent {
 			pt.divisions = this.getDivisions();
 		}
 		
-		if (pt.nowPage != pt.ct.getDisPageNo())
+		// ===== 修复：collect 阶段不 return =====
+		// return 会导致 staffLayout/clefs/keys/staves 的状态更新被跳过，
+		// 且 printHand 不会被调用 → measureUpAll 不被触发，后续 getMeasureUp NPE
+		if (!pt.ct.collectAllNotesForPlayback && pt.nowPage != pt.ct.getDisPageNo())
 			return;			
 		
 		//是否只打印节拍
