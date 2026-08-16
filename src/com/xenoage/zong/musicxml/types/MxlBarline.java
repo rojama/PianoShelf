@@ -91,6 +91,8 @@ public final class MxlBarline implements MxlMusicDataContent {
 			x = pt.measureLeft + pt.measureWidth;
 			break;
 		}
+		// staff 总高度 = 4 * STAFF_LINE_SPACING（原先硬编码 40 = 4*10）
+		final int STAFF_H = 4 * pt.ct.STAFF_LINE_SPACING;
 		if (this.getBarStyle() != null) {
 			switch (this.getBarStyle().getBarStyle()) {
 			case Regular:
@@ -101,27 +103,27 @@ public final class MxlBarline implements MxlMusicDataContent {
 			case None:
 				break;// TODO
 			case Heavy:
-				pt.drawLine(x - 1, pt.measureUp, x - 1, pt.measureUp + 40);
+				pt.drawLine(x - 1, pt.measureUp, x - 1, pt.measureUp + STAFF_H);
 				break;
 			case LightLight:
-				pt.drawLine(x - 5, pt.measureUp, x - 5, pt.measureUp + 40);
+				pt.drawLine(x - 5, pt.measureUp, x - 5, pt.measureUp + STAFF_H);
 				break;
 			case LightHeavy:
-				pt.drawLine(x - 5, pt.measureUp, x - 5, pt.measureUp + 40);
-				pt.drawLine(x - 1, pt.measureUp, x - 1, pt.measureUp + 40);
-				pt.drawLine(x + 1, pt.measureUp, x + 1, pt.measureUp + 41);
+				pt.drawLine(x - 5, pt.measureUp, x - 5, pt.measureUp + STAFF_H);
+				pt.drawLine(x - 1, pt.measureUp, x - 1, pt.measureUp + STAFF_H);
+				pt.drawLine(x + 1, pt.measureUp, x + 1, pt.measureUp + STAFF_H + 1);
 				break;
 			case HeavyLight:
-				pt.drawLine(x - 6, pt.measureUp, x - 6, pt.measureUp + 40);
-				pt.drawLine(x - 5, pt.measureUp, x - 5, pt.measureUp + 40);
-				pt.drawLine(x - 4, pt.measureUp, x - 4, pt.measureUp + 40);
+				pt.drawLine(x - 6, pt.measureUp, x - 6, pt.measureUp + STAFF_H);
+				pt.drawLine(x - 5, pt.measureUp, x - 5, pt.measureUp + STAFF_H);
+				pt.drawLine(x - 4, pt.measureUp, x - 4, pt.measureUp + STAFF_H);
 				break;
 			case HeavyHeavy:
-				pt.drawLine(x - 6, pt.measureUp, x - 6, pt.measureUp + 40);
-				pt.drawLine(x - 5, pt.measureUp, x - 5, pt.measureUp + 40);
-				pt.drawLine(x - 4, pt.measureUp, x - 4, pt.measureUp + 40);
-				pt.drawLine(x - 1, pt.measureUp, x - 1, pt.measureUp + 40);
-				pt.drawLine(x + 1, pt.measureUp, x + 1, pt.measureUp + 41);
+				pt.drawLine(x - 6, pt.measureUp, x - 6, pt.measureUp + STAFF_H);
+				pt.drawLine(x - 5, pt.measureUp, x - 5, pt.measureUp + STAFF_H);
+				pt.drawLine(x - 4, pt.measureUp, x - 4, pt.measureUp + STAFF_H);
+				pt.drawLine(x - 1, pt.measureUp, x - 1, pt.measureUp + STAFF_H);
+				pt.drawLine(x + 1, pt.measureUp, x + 1, pt.measureUp + STAFF_H + 1);
 				break;
 			}
 		}

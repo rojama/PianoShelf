@@ -23,9 +23,42 @@ public class CommonTransfer {
 	private static final String TAG = "CommonTransfer";
 
 	public final int PART_NAME_SIZE = 15;
-	public final int SPACE = 5;
-	public final int NOTE_LINE_HIGHT = 34;
-	public final int NOTE_WIDTH = 15; // 音符宽度用于兼容判断紧挨的两个音符是否是同一个位置
+
+	/**
+	 * 五线谱"两线之间"的距离（也就是 MusicXML 里 1 个 staff-space）。
+	 * 统一常量后：
+	 *  - 五线谱 5 条线：4 个间距 → 总高 = STAFF_LINE_SPACING * 4
+	 *  - 一个 note head 高度应该 ≈ STAFF_LINE_SPACING（我们在 drawBitmap 时按比例缩放 symbol bitmap）
+	 *  - 符干长度 = NOTE_LINE_HIGHT（≈ 3 * STAFF_LINE_SPACING）
+	 * 原先代码把 10 写死在 MxlMeasure / MxlNote / MxlBarline 各处，现在统一到这里，
+	 * 调整 STAFF_LINE_SPACING 即可整体调整五线谱 vs 音符的相对密度。
+	 */
+	public final int STAFF_LINE_SPACING = 9;
+
+	/**
+	 * 符干长度（从 note head 延伸出去的长度），与 STAFF_LINE_SPACING 保持 10:34 的原始比例。
+	 * STAFF_LINE_SPACING=9 → 9/10*34 = 30.6 → 30。
+	 */
+	public final int NOTE_LINE_HIGHT = 30;
+
+	/**
+	 * 音符/符号之间的水平"间隔"（measure 里 oldX 推进后再多加这几个 px）。
+	 * 原 5；随着 STAFF_LINE_SPACING 缩小也同步按 10:9 缩小。
+	 */
+	public final int SPACE = 4;
+
+	/**
+	 * 音符宽度（用于"同一 x 位置判断"），也按 STAFF_LINE_SPACING 同比缩放。
+	 * 原 15 → 15*0.9=13.5 → 13。
+	 */
+	public final int NOTE_WIDTH = 13;
+
+	/**
+	 * 画 bitmap 时统一使用的缩放因子：把 SymbolPool 加载出来的 note/clef/rest/flag/beam 等符号
+	 * 按 STAFF_LINE_SPACING 同比缩小，让"音符大小 vs 五线谱线间距"匹配。
+	 * 原代码 STAFF_LINE_SPACING ≈ 10 时符号是 1x；现在改成 9 → 0.9x。
+	 */
+	public final float SYMBOL_SCALE = 0.90f;
 
 	//每一部分的所有的PaintTransfer
 	public Map<String, PaintTransfer> oldPaintTransfer = new HashMap<String, PaintTransfer>();

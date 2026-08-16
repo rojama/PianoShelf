@@ -408,22 +408,25 @@ public final class MxlNote implements MxlMusicDataContent {
 					break;
 				}
 				int line = ct.computeLinePosition(pitch.getPitch());
-				pt.oldY = 4 * 10 - line * 10 / 2;
+				final int SP = pt.ct.STAFF_LINE_SPACING;
+				pt.oldY = 4 * SP - line * SP / 2;
+				// note head 绘制：topToBase 按 SYMBOL_SCALE 同比缩
 				pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + pt.oldY
-						- symbol.getTopToBase() + 1);
+						- pt.symTopToBase(symbol) + 1);
+				final int noteSymW = pt.symW(symbol);
 				
-				// 加线
+				// 加线：上下超出 staff 的音符补短横线
 				if (line < 0) {
 					for (int i = -2; i >= line; i = i - 2) {
-						float y = pt.measureUp + (-i / 2 + 4) * 10;
+						float y = pt.measureUp + (-i / 2 + 4) * SP;
 						pt.drawLine(pt.measureLeft + pt.oldX - 5, y, pt.measureLeft + pt.oldX
-								+ symbol.getBitmap().getWidth() + 5, y);
+								+ noteSymW + 5, y);
 					}
 				} else if (line > 8) {
 					for (int i = 10; i <= line; i = i + 2) {
-						float y = pt.measureUp - (i / 2 - 4) * 10;
+						float y = pt.measureUp - (i / 2 - 4) * SP;
 						pt.drawLine(pt.measureLeft + pt.oldX - 5, y, pt.measureLeft + pt.oldX
-								+ symbol.getBitmap().getWidth() + 5, y);
+								+ noteSymW + 5, y);
 					}
 				}
 
@@ -433,8 +436,8 @@ public final class MxlNote implements MxlMusicDataContent {
 						for (MxlNotationsContent content : notaion.getElements()) {
 							switch (content.getNotationsContentType()) {
 							case CurvedLine:
-								PointF end = new PointF(pt.measureLeft + symbol.getBitmap().getWidth()
-										/ 2 + pt.oldX, pt.measureUp + pt.oldY);
+								PointF end = new PointF(pt.measureLeft + noteSymW
+										/ 2f + pt.oldX, pt.measureUp + pt.oldY);
 								MxlCurvedLine curvedLine = (MxlCurvedLine) content;
 								for (MxlCurvedLine lastCurvedLine : pt.lastCurvedLinePoint.keySet()) {
 									if (lastCurvedLine.getNumber() == curvedLine.getNumber()) {
@@ -451,13 +454,13 @@ public final class MxlNote implements MxlMusicDataContent {
 												PointF startM = new PointF();
 												startM.set(start);
 												startM.x = pt.getPageWidth()-pt.getMxlAllMargins().getRightMargin();
-												startM.y += (stemValue == MxlStemValue.Down)? -15:15;												
+												startM.y += (stemValue == MxlStemValue.Down)? -1*Math.round(SP*1.5f) : Math.round(SP*1.5f);
 												pt.drawDefaultBezier(start, startM, stemValue);
 												
 												PointF endM = new PointF();
 												endM.set(end);
 												endM.x = pt.getMxlAllMargins().getLeftMargin();
-												endM.y += (stemValue == MxlStemValue.Down)? -15:15;
+												endM.y += (stemValue == MxlStemValue.Down)? -1*Math.round(SP*1.5f) : Math.round(SP*1.5f);
 												pt.drawDefaultBezier(endM, end, stemValue);
 											}
 											pt.lastCurvedLinePoint.remove(lastCurvedLine);
@@ -480,7 +483,7 @@ public final class MxlNote implements MxlMusicDataContent {
 					DebugLog.w("MxlNote", "  画 notations 出错（忽略，不影响后续音符）", t);
 				}
 
-				// 画符干
+				// 画符干（WHOLE 音符没有符干）
 				if (this.getType().type.ordinal() < MxlTypeValue.WHOLE.ordinal()) {
 					float beginX = pt.measureLeft + pt.oldX, startY = pt.measureUp + pt.oldY, stopY = startY;
 
@@ -489,13 +492,13 @@ public final class MxlNote implements MxlMusicDataContent {
 						if (isSameX && pt.oldX > oldLastNoteX) {
 							// beginX -= 1;
 						} else {
-							beginX += symbol.getBitmap().getWidth() - 1;
+							beginX += noteSymW - 1;
 						}
 						stopY -= pt.ct.NOTE_LINE_HIGHT;
 						break;
 					case Down:
 						if (isSameX && pt.oldX < oldLastNoteX) {
-							beginX += symbol.getBitmap().getWidth() - 1;
+							beginX += noteSymW - 1;
 						} else {
 							// beginX += 1;
 						}
@@ -510,16 +513,16 @@ public final class MxlNote implements MxlMusicDataContent {
 					pt.drawLine(beginX, startY, beginX, stopY);
 
 					if (this.getBeams().size() > 0) {
-						// 画符梁
+						// 画符梁：每条 beam 偏移一个 STAFF_LINE_SPACING
 						float beamX = beginX, beamY = stopY;
 						try {
 							for (MxlBeam beam : this.getBeams()) {
 								switch (stemValue) {
 								case Up:
-									beamY += (beam.getNumber() - 1) * 10;
+									beamY += (beam.getNumber() - 1) * SP;
 									break;
 								case Down:
-									beamY -= (beam.getNumber() - 1) * 10;
+									beamY -= (beam.getNumber() - 1) * SP;
 									break;
 								}
 								for (MxlBeam lastBeam : pt.lastBeamPoint.keySet()) {
@@ -531,7 +534,7 @@ public final class MxlNote implements MxlMusicDataContent {
 										case Continue:
 										case End:
 											PointF point = pt.lastBeamPoint.get(lastBeam);
-											// 画粗点
+											// 画粗点：3px 粗的线
 											for (int i = -1; i <= 1; i++) {
 												pt.drawLine(point.x, point.y + i, beamX, beamY + i);
 											}
@@ -553,10 +556,11 @@ public final class MxlNote implements MxlMusicDataContent {
 						// 画符旗
 						Symbol flagSym = pt.ct.symbolPool.getSymbol(CommonSymbol.NoteFlag);
 						if (flagSym != null && flagSym.getBitmap() != null) {
+							final int flagH = pt.symH(flagSym);
+							final int flagTTB = pt.symTopToBase(flagSym);
+							float flagHight = flagH - flagTTB;
 							for (int i = 0; i < MxlTypeValue.QUARTER.ordinal()
 									- this.getType().type.ordinal(); i++) {
-								float flagHight = flagSym.getBitmap().getHeight()
-										- flagSym.getTopToBase();
 								switch (stemValue) {
 								case Up:
 									pt.drawBitmap(flagSym.getBitmap(), beginX, stopY + i * flagHight);
@@ -564,9 +568,9 @@ public final class MxlNote implements MxlMusicDataContent {
 								case Down:
 									Matrix mx = new Matrix();
 									mx.setScale(1, -1); // 产生镜像
-									Bitmap newBitmap = Bitmap.createBitmap(flagSym.getBitmap(), 0, 0,
-											flagSym.getBitmap().getWidth(), flagSym.getBitmap()
-													.getHeight(), mx, true);
+									Bitmap flagOrigBitmap = flagSym.getBitmap();
+									Bitmap newBitmap = Bitmap.createBitmap(flagOrigBitmap, 0, 0,
+											flagOrigBitmap.getWidth(), flagOrigBitmap.getHeight(), mx, true);
 									pt.drawBitmap(newBitmap, beginX, stopY - (i + 2) * flagHight);
 									break;
 								}
@@ -575,12 +579,13 @@ public final class MxlNote implements MxlMusicDataContent {
 					}
 				}
 
-				pt.oldX += symbol.getBitmap().getWidth() + pt.ct.SPACE;
+				pt.oldX += noteSymW + pt.ct.SPACE;
 				break;
 
 			// 休止符
 			case Rest:
-				pt.oldY = 2 * 10;
+				final int SP_R = pt.ct.STAFF_LINE_SPACING;
+				pt.oldY = 2 * SP_R;
 				switch (this.getType().type) {
 				case _256TH:
 					symbol = pt.ct.symbolPool.getSymbol(CommonSymbol.Rest256th);
@@ -611,56 +616,70 @@ public final class MxlNote implements MxlMusicDataContent {
 					break;
 				case BREVE:
 					symbol = pt.ct.symbolPool.getSymbol(CommonSymbol.RestWhole);
-					pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp
-							+ pt.oldY - symbol.getTopToBase());
-					pt.oldX += symbol.getBitmap().getWidth() + pt.ct.SPACE;
+					if (symbol != null) {
+						pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp
+								+ pt.oldY - pt.symTopToBase(symbol));
+						pt.oldX += pt.symW(symbol) + pt.ct.SPACE;
+					}
 					symbol = pt.ct.symbolPool.getSymbol(CommonSymbol.RestHalf);
 					break;
 				case LONG:
 					symbol = pt.ct.symbolPool.getSymbol(CommonSymbol.RestWhole);
-					pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp
-							+ pt.oldY - symbol.getTopToBase());
-					pt.oldX += symbol.getBitmap().getWidth() + pt.ct.SPACE;
+					if (symbol != null) {
+						pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp
+								+ pt.oldY - pt.symTopToBase(symbol));
+						pt.oldX += pt.symW(symbol) + pt.ct.SPACE;
+					}
 					break;
 				}
-				pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + pt.oldY
-						- symbol.getTopToBase());
-				pt.oldX += symbol.getBitmap().getWidth() + pt.ct.SPACE;
+				if (symbol != null) {
+					pt.drawBitmap(symbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + pt.oldY
+							- pt.symTopToBase(symbol));
+					pt.oldX += pt.symW(symbol) + pt.ct.SPACE;
+				}
 				break;
 			}
 		}
 
 		// 画附点符
-		for (int i = 0; i < this.getDot(); i++) {
-			if (pt.oldY % 10 == 0) { // 防止附点符被五线谱覆盖
-				pt.oldY -= 10 / 2;
+		{
+			final int SP = pt.ct.STAFF_LINE_SPACING;
+			for (int i = 0; i < this.getDot(); i++) {
+				if (pt.oldY % SP == 0) { // 防止附点符被五线谱覆盖（当线与附点Y对齐时上移半个间距）
+					pt.oldY -= SP / 2;
+				}
+				Symbol dotSymbol = pt.ct.symbolPool.getSymbol(CommonSymbol.NoteDot);
+				if (dotSymbol != null) {
+					pt.drawBitmap(dotSymbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + pt.oldY
+							- pt.symTopToBase(dotSymbol));
+					pt.oldX += pt.symW(dotSymbol) + pt.ct.SPACE;
+				}
 			}
-			Symbol dotSymbol = pt.ct.symbolPool.getSymbol(CommonSymbol.NoteDot);
-			pt.drawBitmap(dotSymbol.getBitmap(), pt.measureLeft + pt.oldX, pt.measureUp + pt.oldY
-					- dotSymbol.getTopToBase());
-			pt.oldX += dotSymbol.getBitmap().getWidth() + pt.ct.SPACE;
 		}
 
-		// 画歌词
-		float lyricY = pt.measureUp + 80;
-		for (MxlLyric lyric : this.getLyrics()) {
-			pt.setPointInMeasure(lyric.getPosition());
-			if (lyric.getPosition().getDefaultY() != null
-					|| lyric.getPosition().getRelativeY() != null) {
-				lyricY = pt.measureUp + pt.oldY;
-			}
-			switch (lyric.getContent().getLyricContentType()) {
-			case SyllabicText:
-				MxlSyllabicText st = (MxlSyllabicText) lyric.getContent();
-				switch (st.getSyllabic()) {
-				case Single:
-					pt.drawText(st.getText().getValue(), pt.measureLeft + pt.oldX, lyricY);
+		// 画歌词：与 staff 距离按 STAFF_LINE_SPACING 同比
+		{
+			final int SP = pt.ct.STAFF_LINE_SPACING;
+			float lyricY = pt.measureUp + 4 * SP + Math.round(SP * 4.4f); // 原 + 80 (≈10*8) 缩为 SP*8.4
+			for (MxlLyric lyric : this.getLyrics()) {
+				pt.setPointInMeasure(lyric.getPosition());
+				if (lyric.getPosition().getDefaultY() != null
+						|| lyric.getPosition().getRelativeY() != null) {
+					lyricY = pt.measureUp + pt.oldY;
 				}
-				break;
-			case Extend:
-				// TODO
+				switch (lyric.getContent().getLyricContentType()) {
+				case SyllabicText:
+					MxlSyllabicText st = (MxlSyllabicText) lyric.getContent();
+					switch (st.getSyllabic()) {
+					case Single:
+						pt.drawText(st.getText().getValue(), pt.measureLeft + pt.oldX, lyricY);
+					}
+					break;
+				case Extend:
+					// TODO
+				}
+				lyricY += SP; // 每行歌词间隔 = 1 个 line spacing
 			}
-			lyricY += 10;
 		}
 
 	}

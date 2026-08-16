@@ -52,6 +52,16 @@ public class GraphicsActivity extends AppCompatActivity {
 	private GraphicsView graphicsView = null;
 	private String pendingPath = null;
 
+	// 底部播放控制条
+	private android.widget.TextView btnPrevPage;
+	private android.widget.TextView btnPlayPause;
+	private android.widget.TextView btnNextPage;
+	private android.widget.SeekBar seekPlayback;
+	private android.widget.TextView tvPageInfo;
+
+	/** 防止重复给 TouchView 绑定 PageFlipListener。 */
+	private boolean pageFlipHooked = false;
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -131,6 +141,48 @@ public class GraphicsActivity extends AppCompatActivity {
 				graphicsView.screenWidth = dm.widthPixels;
 				graphicsView.screenHeight = dm.heightPixels;
 			}
+
+			// ===== 底部播放控制条绑定 =====
+			btnPrevPage = findViewById(R.id.btn_prev_page);
+			btnPlayPause = findViewById(R.id.btn_play_pause);
+			btnNextPage = findViewById(R.id.btn_next_page);
+			seekPlayback = findViewById(R.id.seek_playback);
+			tvPageInfo = findViewById(R.id.tv_page_info);
+
+			if (btnPrevPage != null) {
+				btnPrevPage.setOnClickListener(v -> doPrevPage());
+			}
+			if (btnNextPage != null) {
+				btnNextPage.setOnClickListener(v -> doNextPage());
+			}
+			if (btnPlayPause != null) {
+				btnPlayPause.setOnClickListener(v -> togglePlayback());
+			}
+			if (seekPlayback != null) {
+				// 初始禁用；播放开始后启用
+				seekPlayback.setEnabled(false);
+				seekPlayback.setProgress(0);
+			}
+			updatePageInfo(1, 1);
+			updatePlayPauseIcon(false);
+
+			// GraphicsView → Activity 的回调：页码 / 播放状态 / 进度
+			graphicsView.setPlaybackStateListener(new GraphicsView.PlaybackStateListener() {
+				@Override public void onPageChanged(int currentPage, int maxPage) {
+					updatePageInfo(currentPage, maxPage);
+					hookTouchViewPageFlipIfNeeded();
+				}
+				@Override public void onPlayStateChanged(boolean isPlaying) {
+					updatePlayPauseIcon(isPlaying);
+					if (seekPlayback != null) seekPlayback.setEnabled(isPlaying);
+				}
+				@Override public void onPlaybackProgress(int currentTick, int maxTick) {
+					if (seekPlayback == null) return;
+					int ratio = (int) ((long) currentTick * seekPlayback.getMax() / Math.max(1, maxTick));
+					seekPlayback.setProgress(ratio);
+				}
+			});
+
 			logPanelRef = findViewById(R.id.debug_log_panel);
 			logScrollRef = findViewById(R.id.logScroll);
 			logHalfMaxPx = Math.round(280 * getResources().getDisplayMetrics().density);
@@ -555,6 +607,89 @@ public class GraphicsActivity extends AppCompatActivity {
 			break;
 		}
 		return true;
+	}
+
+	// ============================================================
+	// 底部播放控制条 + 滑动翻页 辅助方法
+	// ============================================================
+
+	/** 上一页：按钮 / 右滑手势都会走到这里。 */
+	private void doPrevPage() {
+		if (graphicsView == null) return;
+		if (graphicsView.getCurrentPage() <= 1) {
+			Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
+			return;
+		}
+		graphicsView.olddispalyPageNo = graphicsView.dispalyPageNo;
+		graphicsView.dispalyPageNo--;
+		DebugLog.i(TAG, "翻页: 上一页 → " + graphicsView.dispalyPageNo);
+		graphicsView.reShowView();
+	}
+
+	/** 下一页：按钮 / 左滑手势都会走到这里。 */
+	private void doNextPage() {
+		if (graphicsView == null) return;
+		if (graphicsView.getCurrentPage() >= graphicsView.getMaxPage()) {
+			Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
+			return;
+		}
+		graphicsView.olddispalyPageNo = graphicsView.dispalyPageNo;
+		graphicsView.dispalyPageNo++;
+		DebugLog.i(TAG, "翻页: 下一页 → " + graphicsView.dispalyPageNo);
+		graphicsView.reShowView();
+	}
+
+	/** 播放 / 暂停 切换（控制条 ⏵ / ⏸ 按钮）。 */
+	private void togglePlayback() {
+		if (graphicsView == null) return;
+		if (graphicsView.isPlaying()) {
+			DebugLog.i(TAG, "控制条: 暂停播放");
+			graphicsView.stopPlayback();
+		} else {
+			DebugLog.i(TAG, "控制条: 开始播放");
+			graphicsView.play();
+		}
+		invalidateOptionsMenu();
+	}
+
+	/** 刷新控制条中央的"播放/暂停"图标（⏵=待播放，⏸=播放中）。 */
+	private void updatePlayPauseIcon(boolean isPlaying) {
+		if (btnPlayPause == null) return;
+		btnPlayPause.setText(isPlaying ? "⏸" : "⏵");
+		btnPlayPause.setTextColor(isPlaying ? 0xFFC62828 : 0xFF2E7D32); // 红暂停 / 绿播放
+	}
+
+	/** 刷新"第 X / Y 页"文字，并按边界禁用按钮。 */
+	private void updatePageInfo(int currentPage, int maxPage) {
+		int cur = Math.max(1, currentPage);
+		int max = Math.max(1, maxPage);
+		if (tvPageInfo != null) {
+			tvPageInfo.setText(String.format(java.util.Locale.US, "第 %d / %d 页", cur, max));
+		}
+		if (btnPrevPage != null) {
+			btnPrevPage.setEnabled(cur > 1);
+			btnPrevPage.setAlpha(cur > 1 ? 1.0f : 0.35f);
+		}
+		if (btnNextPage != null) {
+			btnNextPage.setEnabled(cur < max);
+			btnNextPage.setAlpha(cur < max ? 1.0f : 0.35f);
+		}
+	}
+
+	/**
+	 * TouchView 只有在 onLoadFinished 把 detail 创建好之后才存在，
+	 * 所以我们在每次 onPageChanged 回调时尝试 hook 一次（成功后跳过）。
+	 */
+	private void hookTouchViewPageFlipIfNeeded() {
+		if (pageFlipHooked || graphicsView == null) return;
+		TouchView tv = graphicsView.getTouchView();
+		if (tv == null) return;
+		tv.setPageFlipListener(new TouchView.PageFlipListener() {
+			@Override public void onPrevPage() { doPrevPage(); }
+			@Override public void onNextPage() { doNextPage(); }
+		});
+		pageFlipHooked = true;
+		DebugLog.i(TAG, "已把滑动翻页回调挂到 TouchView");
 	}
 
 	@Override

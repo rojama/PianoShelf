@@ -87,20 +87,18 @@ public final class MxlMeasure {
 		//Log.d("MeasureDone", pt.nowPartID + ":" + this.number + "/" + this.width + "/" + pt.nowLine + "/" + pt.measureUp);
 		
 		// pt.measureUp = pt.measureUpAll.get(pt.nowLine);
+		final int SP = pt.ct.STAFF_LINE_SPACING;
 		for (Integer num : pt.nowClefType.keySet()) {
 			pt.measureUp = pt.getMeasureUp(num);
-			// 打五线谱
+			// 打五线谱：两线间距 = pt.ct.STAFF_LINE_SPACING（原硬编码 10px）
 			for (int i = 0; i < 5; i++) {
-				pt.drawLine(pt.measureLeft, pt.measureUp + i * 10,
-						pt.measureLeft + pt.measureWidth, pt.measureUp + i * 10);
+				pt.drawLine(pt.measureLeft, pt.measureUp + i * SP,
+						pt.measureLeft + pt.measureWidth, pt.measureUp + i * SP);
 			}
-			// pt.drawLine(pt.measureLeft + pt.measureWidth, pt.measureUp + 4 *
-			// 10,
-			// pt.measureLeft + pt.measureWidth, pt.measureUp);
 		}
 
 		// 记录首末行的Y坐标
-		float firstY = pt.getMeasureUp(1), lastY = pt.getMeasureUp(pt.nowClefType.size()) + 4 * 10;
+		float firstY = pt.getMeasureUp(1), lastY = pt.getMeasureUp(pt.nowClefType.size()) + 4 * SP;
 
 		// 画分割小节线
 		pt.drawLine(pt.measureLeft + pt.measureWidth, firstY, pt.measureLeft + pt.measureWidth,

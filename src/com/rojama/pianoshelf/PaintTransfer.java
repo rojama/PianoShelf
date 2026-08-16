@@ -8,6 +8,7 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PathEffect;
@@ -77,9 +78,10 @@ public class PaintTransfer {
 
 	public Float getMeasureUp(Integer num) {
 		float meaup = this.measureUpAll.get(nowLine);
-		// meaup += this.getStaffDistance(1) + 40;
+		// meaup += this.getStaffDistance(1) + 4 * STAFF_LINE_SPACING;
+		int staffH = (ct != null) ? (4 * ct.STAFF_LINE_SPACING) : 40;
 		for (int i = 1; i < num; i++) {
-			meaup += getStaffDistance(i + 1) + 40;
+			meaup += getStaffDistance(i + 1) + staffH;
 		}
 		return meaup;
 	}
@@ -164,12 +166,46 @@ public class PaintTransfer {
 		return;
 	}
 
-	// 绘图公用
+	// 绘图公用：统一按 ct.SYMBOL_SCALE 缩放（保证音符大小与五线谱间距成比例），
+	// 然后对 bitmap 按当前画笔颜色 MULTIPLY 染色（保证前景色统一，例如夜间模式下变白）。
 	public void drawBitmap(Bitmap bitmap, float left, float top) {
-		Canvas can = new Canvas(bitmap);
-		can.drawColor(this.getPaint().getColor(), Mode.MULTIPLY);
-		this.getCanvas().drawBitmap(bitmap, left, top, this.getPaint());
+		Bitmap src = bitmap;
+		if (src == null) return;
+		float s = (ct != null) ? ct.SYMBOL_SCALE : 1f;
+		if (s != 1f) {
+			try {
+				Matrix m = new Matrix();
+				m.postScale(s, s);
+				src = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), m, true);
+			} catch (Throwable ignored) {
+				src = bitmap;
+			}
+		}
+		// 染色：按当前 paint.getColor() MULTIPLY 叠色
+		try {
+			Canvas can = new Canvas(src);
+			can.drawColor(this.getPaint().getColor(), Mode.MULTIPLY);
+		} catch (Throwable ignored) { /* 某些 bitmap config 不支持可写 */ }
+		this.getCanvas().drawBitmap(src, left, top, this.getPaint());
 	}
+
+	/** 按 SYMBOL_SCALE 缩放后的 symbol bitmap width / height / topToBase，避免调用者自己写 math。 */
+	public int symW(Symbol symbol) {
+		if (symbol == null || symbol.getBitmap() == null) return 0;
+		return Math.max(1, Math.round(symbol.getBitmap().getWidth() * symScale()));
+	}
+	public int symH(Symbol symbol) {
+		if (symbol == null || symbol.getBitmap() == null) return 0;
+		return Math.max(1, Math.round(symbol.getBitmap().getHeight() * symScale()));
+	}
+	public int symTopToBase(Symbol symbol) {
+		if (symbol == null) return 0;
+		return Math.round(symbol.getTopToBase() * symScale());
+	}
+	private float symScale() {
+		return (ct != null) ? ct.SYMBOL_SCALE : 1f;
+	}
+	private int S() { return (ct != null) ? ct.STAFF_LINE_SPACING : 10; }
 
 	public void drawText(String textContent, float x, float y) {
 		this.getCanvas().drawText(textContent, x, y, this.getPaint());
@@ -205,20 +241,24 @@ public class PaintTransfer {
 	public void drawDefaultBezier(PointF start, PointF end, MxlStemValue sv) {
 		PointF controlLow = new PointF();
 		PointF controlHig = new PointF();
+		int sp = S();
+		int off10 = sp;                  // 原 10
+		int off15 = Math.round(sp * 1.5f); // 原 15
+		int off20 = Math.round(sp * 2.0f); // 原 20
 //		if (start.x <= end.x) {
 			switch (sv) {
 			default:
 			case Up:
-				start.y += 10;
-				end.y += 10;
-				controlLow.set((start.x + end.x) / 2, (start.y + end.y) / 2 + 15);
-				controlHig.set((start.x + end.x) / 2, (start.y + end.y) / 2 + 20);
+				start.y += off10;
+				end.y += off10;
+				controlLow.set((start.x + end.x) / 2, (start.y + end.y) / 2 + off15);
+				controlHig.set((start.x + end.x) / 2, (start.y + end.y) / 2 + off20);
 				break;
 			case Down:
-				start.y -= 10;
-				end.y -= 10;
-				controlLow.set((start.x + end.x) / 2, (start.y + end.y) / 2 - 15);
-				controlHig.set((start.x + end.x) / 2, (start.y + end.y) / 2 - 20);
+				start.y -= off10;
+				end.y -= off10;
+				controlLow.set((start.x + end.x) / 2, (start.y + end.y) / 2 - off15);
+				controlHig.set((start.x + end.x) / 2, (start.y + end.y) / 2 - off20);
 				break;
 			}
 			this.drawBezierPath(start, controlLow, controlHig, end);
@@ -267,19 +307,23 @@ public class PaintTransfer {
 	// 画谱号
 	public float printClef(int key, float x, float y) {
 		ClefType clef = this.nowClefType.get(key);
-		if (this.nowClefType != null) {
+		if (this.nowClefType != null && clef != null) {
 			CommonSymbol id = null;
 			if (clef == ClefType.G) {
 				id = CommonSymbol.getClef(ClefType.G);
 			} else if (clef == ClefType.F) {
 				id = CommonSymbol.getClef(ClefType.F);
+			} else {
+				id = CommonSymbol.getClef(ClefType.G); // C / Percussion / TAB / None 兜底 G
 			}
 			Symbol symbol = this.ct.symbolPool.getSymbol(id);
+			if (symbol == null || symbol.getBitmap() == null) return 0;
 			int line = clef.getLine();
-			y = y - line * 10 / 2;
-			y += 4 * 10 - symbol.getTopToBase();
+			int sp = S();
+			y = y - line * sp / 2;
+			y += 4 * sp - symTopToBase(symbol);
 			this.drawBitmap(symbol.getBitmap(), this.measureLeft + x, y);
-			return symbol.getBitmap().getWidth();
+			return symW(symbol);
 		}
 		return 0;
 	}
@@ -309,9 +353,10 @@ public class PaintTransfer {
 		}
 		if (id != null) {
 			Symbol symbol = ct.symbolPool.getSymbol(CommonSymbol.getAccidental(id));
-			y = y + 10 * 2 - symbol.getTopToBase();
+			if (symbol == null || symbol.getBitmap() == null) return 0;
+			y = y + S() * 2 - symTopToBase(symbol);
 			this.drawBitmap(symbol.getBitmap(), this.measureLeft + x, y);
-			return symbol.getBitmap().getWidth();
+			return symW(symbol);
 		}
 		return 0;
 	}
@@ -326,31 +371,17 @@ public class PaintTransfer {
 						.getSymbol(CommonSymbol.getDigit(timecon.getBeats()));
 				Symbol symbolDown = ct.symbolPool.getSymbol(CommonSymbol.getDigit(timecon
 						.getBeatType()));
-				this.drawBitmap(symbolUp.getBitmap(), this.measureLeft + x, y + 1);
-				this.drawBitmap(symbolDown.getBitmap(), this.measureLeft + x, y + 2 * 10 + 1);
-				x += symbolUp.getBitmap().getWidth() + ct.SPACE;
-				width += symbolUp.getBitmap().getWidth();
+				if (symbolUp != null) {
+					this.drawBitmap(symbolUp.getBitmap(), this.measureLeft + x, y + 1);
+					x += symW(symbolUp) + ct.SPACE;
+					width += symW(symbolUp);
+				}
+				if (symbolDown != null) {
+					this.drawBitmap(symbolDown.getBitmap(), this.measureLeft + x - (symbolUp == null ? 0 : symW(symbolUp)) - ct.SPACE, y + 2 * S() + 1);
+				}
 			} else {
 				// TODO
 			}
-			// if (this.nowTime.getSymbol() != null) {
-			// CommonSymbol id = null;
-			// switch (this.nowTime.getSymbol()) {
-			// case Common:
-			// id = CommonSymbol.TimeCommon;
-			// break;
-			// case Cut:
-			// break;
-			// case SingleNumber:
-			// break;
-			// case Normal:
-			// break;
-			// }
-			// Symbol symbol = ct.symbolPool.getSymbol(id);
-			// y = y + 10 * 2 - symbol.getTopToBase();
-			// this.drawBitmap(symbol.getBitmap(), this.measureLeft + x, y);
-			// width += symbol.getBitmap().getWidth();
-			// }
 		}
 		return width;
 	}

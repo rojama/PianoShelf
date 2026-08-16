@@ -56,6 +56,31 @@ public class GraphicsView {
 	// (保持与原始值一致以避免节奏变化)
 	static final int PARTTIME_MS = 5;
 
+	/** 播放/页码状态回调（供 GraphicsActivity 刷新控制条 UI）。 */
+	public interface PlaybackStateListener {
+		/** 页码变更：加载完成 / 手动翻页 / 自动翻页。 */
+		void onPageChanged(int currentPage, int maxPage);
+		/** 播放状态变更：开始 / 暂停 / 停止。 */
+		void onPlayStateChanged(boolean isPlaying);
+		/** 播放进度：tick / maxTick，Activity 更新 SeekBar。 */
+		void onPlaybackProgress(int currentTick, int maxTick);
+	}
+	private PlaybackStateListener stateListener;
+	public void setPlaybackStateListener(PlaybackStateListener l) { this.stateListener = l; }
+	private void notifyPageChanged() {
+		if (stateListener == null) return;
+		int max = (ct == null) ? 1 : Math.max(1, ct.maxPage);
+		stateListener.onPageChanged(Math.max(1, dispalyPageNo), max);
+	}
+	private void notifyPlayStateChanged() {
+		if (stateListener == null) return;
+		stateListener.onPlayStateChanged(playing.get());
+	}
+	private void notifyProgress() {
+		if (stateListener == null) return;
+		stateListener.onPlaybackProgress(timeCounter.get(), Math.max(1, maxTime));
+	}
+
 	public String filepath;
 	public int screenWidth;
 	public int screenHeight;
@@ -73,6 +98,12 @@ public class GraphicsView {
 	private android.widget.ScrollView logScroll = null;
 	private android.widget.TextView logText = null;
 	public boolean playOnCompleat = false;
+
+	/** 供 Activity 获取 TouchView，用于绑定滑动翻页回调。 */
+	public TouchView getTouchView() { return (detail == null) ? null : detail.tv; }
+	/** 供 Activity 查询当前页 / 总页数。 */
+	public int getCurrentPage() { return Math.max(1, dispalyPageNo); }
+	public int getMaxPage() { return (ct == null) ? 1 : Math.max(1, ct.maxPage); }
 
 	// -------- playback scheduler (replaces Thread-per-note) --------
 	private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -307,6 +338,8 @@ public class GraphicsView {
 			} else {
 				detail.tv.setImageBitmap(bitmap);
 			}
+			// 渲染完成 → 通知 Activity 更新控制条页码
+			notifyPageChanged();
 			if (playOnCompleat) {
 				playOnCompleat = false;
 				play();
@@ -354,6 +387,8 @@ public class GraphicsView {
 		timeCounter.set(0);
 		maxTime = computeMaxTime(plan);
 		playing.set(true);
+		notifyPlayStateChanged();
+		notifyProgress();
 
 		// Start scheduler with 2 threads (tick + spare)
 		scheduler = Executors.newScheduledThreadPool(2);
@@ -370,6 +405,12 @@ public class GraphicsView {
 							if (raw > 0) SoundPoolUtiil.playSound(raw);
 						}
 					}
+				}
+				// 每隔若干 tick 向 UI 线程推送进度（避免每条都 IPC）
+				if (now % 4 == 0) {
+					mainHandler.post(new Runnable() {
+						@Override public void run() { notifyProgress(); }
+					});
 				}
 				if (now >= maxTime) {
 					stopPlayback();
@@ -389,7 +430,15 @@ public class GraphicsView {
 
 	/** Stop playback and release its scheduled tasks (but keep pool for reuse). */
 	public synchronized void stopPlayback() {
-		playing.set(false);
+		boolean wasPlaying = playing.getAndSet(false);
+		if (wasPlaying) {
+			mainHandler.post(new Runnable() {
+				@Override public void run() {
+					notifyPlayStateChanged();
+					notifyProgress();
+				}
+			});
+		}
 		if (tickFuture != null) {
 			try { tickFuture.cancel(false); } catch (Throwable ignored) {}
 			tickFuture = null;
@@ -402,8 +451,10 @@ public class GraphicsView {
 
 	private void autoAdvancePage() {
 		if (ct != null && ct.maxPage > dispalyPageNo) {
+			olddispalyPageNo = dispalyPageNo;
 			dispalyPageNo++;
 			playOnCompleat = true;
+			notifyPageChanged();
 			reShowView();
 		}
 	}
