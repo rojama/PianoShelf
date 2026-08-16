@@ -174,6 +174,8 @@ public class PaintTransfer {
 	// 绘图公用：统一按 ct.SYMBOL_SCALE 缩放（保证音符大小与五线谱间距成比例），
 	// 然后对 bitmap 按当前画笔颜色 MULTIPLY 染色（保证前景色统一，例如夜间模式下变白）。
 	public void drawBitmap(Bitmap bitmap, float left, float top) {
+		// collect 阶段只收集 note 坐标，不执行任何绘制（避免 symbol bitmap 被染色修改、canvas 被污染）
+		if (ct != null && ct.collectAllNotesForPlayback) return;
 		Bitmap src = bitmap;
 		if (src == null) return;
 		float s = (ct != null) ? ct.SYMBOL_SCALE : 1f;
@@ -213,14 +215,17 @@ public class PaintTransfer {
 	private int S() { return (ct != null) ? ct.STAFF_LINE_SPACING : 10; }
 
 	public void drawText(String textContent, float x, float y) {
+		if (ct != null && ct.collectAllNotesForPlayback) return;
 		this.getCanvas().drawText(textContent, x, y, this.getPaint());
 	}
 
 	public void drawLine(float startX, float startY, float stopX, float stopY) {
+		if (ct != null && ct.collectAllNotesForPlayback) return;
 		this.getCanvas().drawLine(startX, startY, stopX, stopY, this.getPaint());
 	}
 
 	public void drawPath(Path path) {
+		if (ct != null && ct.collectAllNotesForPlayback) return;
 		this.getCanvas().drawPath(path, this.getPaint());
 	}
 
