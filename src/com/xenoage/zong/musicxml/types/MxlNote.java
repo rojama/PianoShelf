@@ -662,3 +662,4 @@ public final class MxlNote implements MxlMusicDataContent {
 	}
 
 }
+}
