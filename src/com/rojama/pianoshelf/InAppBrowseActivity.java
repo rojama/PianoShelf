@@ -314,6 +314,7 @@ public class InAppBrowseActivity extends AppCompatActivity {
                     intent.setDataAndType(uri, "application/vnd.recordare.musicxml");
                     intent.setClass(InAppBrowseActivity.this, GraphicsActivity.class);
                     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    intent.putExtra(GraphicsActivity.EXTRA_FILE_PATH, localFile.getAbsolutePath());
                     startActivity(intent);
                     Toast.makeText(InAppBrowseActivity.this,
                             R.string.online_open_ok, Toast.LENGTH_SHORT).show();

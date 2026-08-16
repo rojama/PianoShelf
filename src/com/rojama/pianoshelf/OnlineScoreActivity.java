@@ -268,6 +268,7 @@ public class OnlineScoreActivity extends AppCompatActivity {
             intent.setDataAndType(uri, "application/vnd.recordare.musicxml");
             intent.setClass(this, GraphicsActivity.class);
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.putExtra(GraphicsActivity.EXTRA_FILE_PATH, file.getAbsolutePath());
             startActivity(intent);
             Toast.makeText(this, R.string.online_open_ok, Toast.LENGTH_SHORT).show();
         } catch (Throwable t) {

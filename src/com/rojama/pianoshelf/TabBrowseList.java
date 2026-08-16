@@ -364,6 +364,9 @@ public class TabBrowseList extends ListView implements OnItemClickListener, OnIt
 			intent.setClass(context, GraphicsActivity.class);
 			intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 			intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+			// 直接传文件路径，GraphicsActivity 优先读这个 extra，
+			// 避免 content:// URI → new File(new URI(...)) 的 IllegalArgumentException
+			intent.putExtra(GraphicsActivity.EXTRA_FILE_PATH, file.getAbsolutePath());
 			context.startActivity(intent);
 		} catch (Throwable t) {
 			Toast.makeText(context, context.getString(R.string.info_canot_read),

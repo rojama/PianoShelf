@@ -5,14 +5,17 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.WindowManager;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -29,9 +32,14 @@ import androidx.core.content.ContextCompat;
  *  - 生命周期: onDestroy 释放 GraphicsView (播放线程池 + SoundPool)
  *  - 权限: Android 6.0+ 动态检查 READ/WRITE 存储权限
  *  - 菜单启用判断: 增加 null-safe
+ *  - URI 处理: 支持 content:// (FileProvider/SAF) 和 file:// 两种 scheme
+ *    旧代码 new File(new URI("content://...")) 会抛 IllegalArgumentException
+ *    导致 filepath=null → .xml/.mxl 全部打不开
  */
 public class GraphicsActivity extends AppCompatActivity {
 	private static final int REQ_STORAGE = 1001;
+	/** 内部启动时直接传文件路径，避免 FileProvider URI 往返转换 */
+	public static final String EXTRA_FILE_PATH = "com.rojama.pianoshelf.FILE_PATH";
 	private GraphicsView graphicsView = null;
 	private String pendingPath = null;
 
@@ -41,22 +49,54 @@ public class GraphicsActivity extends AppCompatActivity {
 		setContentView(R.layout.shelf);
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-		String filepath = null;
-		try {
-			if (getIntent() != null && getIntent().getData() != null) {
-				File file = new File(new URI(getIntent().getData().toString()));
-				filepath = file.getPath();
-			}
-		} catch (URISyntaxException e) {
-			e.printStackTrace();
-		} catch (IllegalArgumentException ia) {
-			// ignore malformed uri
-		}
+		String filepath = resolveFilePath(getIntent());
 		pendingPath = filepath;
 
 		if (ensureStoragePermission()) {
 			initGraphicsView(filepath);
 		}
+	}
+
+	/**
+	 * 从 Intent 中提取乐谱文件路径，按优先级依次尝试：
+	 *   1) EXTRA_FILE_PATH (内部启动直接传路径，最可靠)
+	 *   2) file:// URI → getPath()
+	 *   3) content:// URI → SafeFileResolver 复制到 cache 后返回路径
+	 */
+	@Nullable
+	private String resolveFilePath(@Nullable Intent intent) {
+		if (intent == null) return null;
+
+		// 1) 内部 extra
+		String extraPath = intent.getStringExtra(EXTRA_FILE_PATH);
+		if (extraPath != null && new File(extraPath).isFile()) {
+			return extraPath;
+		}
+
+		// 2) / 3) URI
+		Uri uri = intent.getData();
+		if (uri == null) return null;
+
+		String scheme = uri.getScheme();
+		if ("file".equals(scheme)) {
+			try {
+				return new File(new URI(uri.toString())).getPath();
+			} catch (URISyntaxException | IllegalArgumentException e) {
+				e.printStackTrace();
+			}
+			return null;
+		}
+
+		if ("content".equals(scheme)) {
+			// FileProvider / SAF content:// URI → 复制到 cache 再返回路径
+			String cached = SafeFileResolver.materializeToCacheFile(this, uri);
+			if (cached == null) {
+				Toast.makeText(this, R.string.info_open_err, Toast.LENGTH_LONG).show();
+			}
+			return cached;
+		}
+
+		return null;
 	}
 
 	private boolean ensureStoragePermission() {

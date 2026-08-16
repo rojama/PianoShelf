@@ -272,6 +272,7 @@ public class PlatformWebViewActivity extends AppCompatActivity {
                     intent.setDataAndType(uri, "application/vnd.recordare.musicxml");
                     intent.setClass(PlatformWebViewActivity.this, GraphicsActivity.class);
                     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    intent.putExtra(GraphicsActivity.EXTRA_FILE_PATH, localFile.getAbsolutePath());
                     startActivity(intent);
                     Toast.makeText(PlatformWebViewActivity.this,
                             R.string.online_open_ok, Toast.LENGTH_SHORT).show();
@@ -369,6 +370,7 @@ public class PlatformWebViewActivity extends AppCompatActivity {
                             i.setDataAndType(u, "application/vnd.recordare.musicxml");
                             i.setClass(PlatformWebViewActivity.this, GraphicsActivity.class);
                             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                            i.putExtra(GraphicsActivity.EXTRA_FILE_PATH, f.getAbsolutePath());
                             startActivity(i);
                         } catch (Throwable ignored) {}
                     }
