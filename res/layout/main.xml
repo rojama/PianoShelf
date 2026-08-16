@@ -65,7 +65,7 @@
                     android:layout_height="24dp"
                     android:scaleType="fitCenter"
                     android:duplicateParentState="true"
-                    android:tint="@drawable/bottom_nav_icon_color"
+                    android:tint="@color/bottom_nav_icon_color"
                     android:src="@drawable/ic_tab_browse"/>
                 <TextView
                     android:layout_width="wrap_content"
@@ -73,7 +73,7 @@
                     android:layout_marginTop="2dp"
                     android:textSize="11sp"
                     android:duplicateParentState="true"
-                    android:textColor="@drawable/bottom_nav_text_color"
+                    android:textColor="@color/bottom_nav_text_color"
                     android:text="@string/tab_browse_short"/>
             </LinearLayout>
         </LinearLayout>
@@ -103,7 +103,7 @@
                     android:layout_height="24dp"
                     android:scaleType="fitCenter"
                     android:duplicateParentState="true"
-                    android:tint="@drawable/bottom_nav_icon_color"
+                    android:tint="@color/bottom_nav_icon_color"
                     android:src="@drawable/ic_tab_recent"/>
                 <TextView
                     android:layout_width="wrap_content"
@@ -111,7 +111,7 @@
                     android:layout_marginTop="2dp"
                     android:textSize="11sp"
                     android:duplicateParentState="true"
-                    android:textColor="@drawable/bottom_nav_text_color"
+                    android:textColor="@color/bottom_nav_text_color"
                     android:text="@string/tab_recent_short"/>
             </LinearLayout>
         </LinearLayout>
@@ -141,7 +141,7 @@
                     android:layout_height="24dp"
                     android:scaleType="fitCenter"
                     android:duplicateParentState="true"
-                    android:tint="@drawable/bottom_nav_icon_color"
+                    android:tint="@color/bottom_nav_icon_color"
                     android:src="@drawable/ic_tab_online"/>
                 <TextView
                     android:layout_width="wrap_content"
@@ -149,7 +149,7 @@
                     android:layout_marginTop="2dp"
                     android:textSize="11sp"
                     android:duplicateParentState="true"
-                    android:textColor="@drawable/bottom_nav_text_color"
+                    android:textColor="@color/bottom_nav_text_color"
                     android:text="@string/tab_online_short"/>
             </LinearLayout>
         </LinearLayout>
@@ -179,7 +179,7 @@
                     android:layout_height="24dp"
                     android:scaleType="fitCenter"
                     android:duplicateParentState="true"
-                    android:tint="@drawable/bottom_nav_icon_color"
+                    android:tint="@color/bottom_nav_icon_color"
                     android:src="@drawable/ic_tab_favorite"/>
                 <TextView
                     android:layout_width="wrap_content"
@@ -187,7 +187,7 @@
                     android:layout_marginTop="2dp"
                     android:textSize="11sp"
                     android:duplicateParentState="true"
-                    android:textColor="@drawable/bottom_nav_text_color"
+                    android:textColor="@color/bottom_nav_text_color"
                     android:text="@string/tab_favorite_short"/>
             </LinearLayout>
         </LinearLayout>
@@ -217,7 +217,7 @@
                     android:layout_height="24dp"
                     android:scaleType="fitCenter"
                     android:duplicateParentState="true"
-                    android:tint="@drawable/bottom_nav_icon_color"
+                    android:tint="@color/bottom_nav_icon_color"
                     android:src="@drawable/ic_tab_settings"/>
                 <TextView
                     android:layout_width="wrap_content"
@@ -225,7 +225,7 @@
                     android:layout_marginTop="2dp"
                     android:textSize="11sp"
                     android:duplicateParentState="true"
-                    android:textColor="@drawable/bottom_nav_text_color"
+                    android:textColor="@color/bottom_nav_text_color"
                     android:text="@string/tab_settings_short"/>
             </LinearLayout>
         </LinearLayout>
