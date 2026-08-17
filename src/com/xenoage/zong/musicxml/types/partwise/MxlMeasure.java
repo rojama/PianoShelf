@@ -113,14 +113,36 @@ public final class MxlMeasure {
 		// 每行先打印谱号和调号
 		pt.oldX = 0;
 		if (pt.isNewSystem) {
-			// 如果是多行的打印大括号
+			// 如果是多行的打印大括号（按 staff span 高度自适应缩放，避免和 notes/clefs 同 SYMBOL_SCALE 过大）
 			float midY = (firstY + lastY) / 2;
 			float tempX = pt.measureLeft;
 			if (pt.nowClefType.size() > 1) {
 				Symbol symbol = pt.ct.symbolPool.getSymbol(CommonSymbol.BracketBrace);
-				float y = midY - symbol.getTopToBase();
-				tempX -= symbol.getBitmap().getWidth() + 5;
-				pt.drawBitmap(symbol.getBitmap(), tempX, y);
+				if (symbol != null && symbol.getBitmap() != null) {
+					android.graphics.Bitmap bm = symbol.getBitmap();
+					float staffSpan = lastY - firstY; // 两 staff 之间 top-to-bottom 高
+					// brace 目标高度 ≈ staffSpan + SP*1 (上下各留半个 SP)
+					float targH = Math.max(40, staffSpan + 1f * pt.ct.STAFF_LINE_SPACING);
+					float braceScale = Math.max(0.5f, Math.min(3f, targH / Math.max(1, bm.getHeight())));
+					int scaledW = Math.max(1, Math.round(bm.getWidth() * braceScale));
+					int scaledTTB = Math.round(symbol.getTopToBase() * braceScale);
+					float drawTopY = midY - scaledTTB;
+					float drawX = tempX - scaledW - 5f; // 在 measureLeft 左边再往左
+					android.graphics.Bitmap src = bm;
+					try {
+						if (Math.abs(braceScale - 1.0f) > 0.01f) {
+							android.graphics.Matrix m = new android.graphics.Matrix();
+							m.postScale(braceScale, braceScale);
+							src = android.graphics.Bitmap.createBitmap(bm, 0, 0, bm.getWidth(), bm.getHeight(), m, true);
+						}
+						try {
+							android.graphics.Canvas can = new android.graphics.Canvas(src);
+							can.drawColor(pt.getPaint().getColor(), android.graphics.PorterDuff.Mode.MULTIPLY);
+						} catch (Throwable ignored) { }
+						pt.getCanvas().drawBitmap(src, drawX, drawTopY, pt.getPaint());
+					} catch (Throwable ignored) { }
+					tempX = drawX;
+				}
 			}
 			// 第一节打印名称
 			if (pt.nowMeasure == 1) {

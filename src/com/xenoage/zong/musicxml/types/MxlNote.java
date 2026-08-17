@@ -602,8 +602,8 @@ public final class MxlNote implements MxlMusicDataContent {
 							for (int i = 0; i < flags; i++) {
 								switch (stemValue) {
 								case Up:
-									// flag 挂在 stem 末端 (stopY) ，向下叠
-									pt.drawBitmap(flagSym.getBitmap(), beginX, stopY + i * flagHight);
+									// Up flag: 符尾左端"勾"要附着在 stem 上，整体图形向右展开 → 在 stem X 上 +1px 保证在符头右侧边缘对齐
+									pt.drawBitmap(flagSym.getBitmap(), beginX + 1, stopY + i * flagHight);
 									break;
 								case Down:
 									// Down 方向：先镜像，再对齐 stem 末端
@@ -613,7 +613,7 @@ public final class MxlNote implements MxlMusicDataContent {
 									Bitmap newBitmap = Bitmap.createBitmap(flagOrigBitmap, 0, 0,
 											flagOrigBitmap.getWidth(), flagOrigBitmap.getHeight(), mx, true);
 									// flag 高 = flagHight → 第 i 个从 stopY 向上偏移 (i+1)*flagHight
-									pt.drawBitmap(newBitmap, beginX, stopY - (i + 1) * flagHight);
+									pt.drawBitmap(newBitmap, beginX - 1, stopY - (i + 1) * flagHight);
 									break;
 								}
 							}
@@ -715,28 +715,81 @@ public final class MxlNote implements MxlMusicDataContent {
 			}
 		}
 
-		// 画歌词：与 staff 距离按 STAFF_LINE_SPACING 同比
+		// 画歌词：支持 Single/Begin/Middle/End + Extend 短横，按 staff 索引取对应 topY
 		{
 			final int SP = pt.ct.STAFF_LINE_SPACING;
-			float lyricY = pt.measureUp + 4 * SP + Math.round(SP * 4.4f); // 原 + 80 (≈10*8) 缩为 SP*8.4
+			// 根据 note 的 staff 属性 (默认 1) 定位到对应 staff 的 5线顶部 Y
+			Integer sIdx = this.getStaff();
+			int staffNum = (sIdx == null) ? 1 : Math.max(1, sIdx);
+			float staffTopY;
+			try {
+				// getMeasureUp(n) 已处理 staff 1..N 的叠加（返回本 part 的第 N 个 staff 的 top Y）
+				staffTopY = pt.getMeasureUp(staffNum);
+			} catch (Throwable t) {
+				staffTopY = pt.measureUp;
+			}
+			// 5 线底部 Y = staffTopY + 4SP
+			// lyric baseline 位于底部 Y 下方 + SP*4.4 (可被 XML default-y 覆盖)
+			float lyricY = staffTopY + 4 * SP + Math.round(SP * 4.4f);
+			// lyrics 字号：比默认乐谱 paint 更小，约 SP*1.3
+			int oldTextSize = 0;
+			android.graphics.Paint paint = pt.getPaint();
+			if (paint != null) {
+				oldTextSize = (int) paint.getTextSize();
+				int newSize = Math.max(9, Math.round(SP * 1.3f));
+				if (newSize != oldTextSize) paint.setTextSize(newSize);
+				paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+			}
 			for (MxlLyric lyric : this.getLyrics()) {
+				float textX = pt.measureLeft + pt.oldX + pt.symW(symbol) * 0.5f; // 音符 head 水平居中
 				pt.setPointInMeasure(lyric.getPosition());
+				// defaultX / defaultY 在 XML 里为 tenths 单位，按 tenthsToPx 换算
 				if (lyric.getPosition().getDefaultY() != null
 						|| lyric.getPosition().getRelativeY() != null) {
-					lyricY = pt.measureUp + pt.oldY;
+					float sc = (pt.ct.tenthsToPx > 0f) ? pt.ct.tenthsToPx : 1f;
+					if (lyric.getPosition().getDefaultY() != null) {
+						lyricY = staffTopY + 4 * SP + Math.abs(lyric.getPosition().getDefaultY()) * sc;
+					} else {
+						lyricY += (-lyric.getPosition().getRelativeY()) * sc;
+					}
+				}
+				if (lyric.getPosition().getDefaultX() != null
+						|| lyric.getPosition().getRelativeX() != null) {
+					float sc = (pt.ct.tenthsToPx > 0f) ? pt.ct.tenthsToPx : 1f;
+					if (lyric.getPosition().getDefaultX() != null) {
+						textX = pt.measureLeft + lyric.getPosition().getDefaultX() * sc;
+					} else {
+						textX += lyric.getPosition().getRelativeX() * sc;
+					}
 				}
 				switch (lyric.getContent().getLyricContentType()) {
 				case SyllabicText:
 					MxlSyllabicText st = (MxlSyllabicText) lyric.getContent();
-					switch (st.getSyllabic()) {
-					case Single:
-						pt.drawText(st.getText().getValue(), pt.measureLeft + pt.oldX, lyricY);
+					String syllable = (st.getText() == null) ? "" : st.getText().getValue();
+					if (syllable != null && syllable.length() > 0) {
+						// Single/Begin/Middle/End 全部绘制，文字对齐 (MxlSyllabic 用于 melisma 下划线)
+						pt.drawText(syllable, textX, lyricY);
+						// Begin/Middle 后加 "–" 小连字符 (表示未完)，向右偏移半个字宽
+						if (st.getSyllabic() == com.xenoage.zong.musicxml.types.enums.MxlSyllabic.Begin
+								|| st.getSyllabic() == com.xenoage.zong.musicxml.types.enums.MxlSyllabic.Middle) {
+							float tw = (paint != null) ? paint.measureText(syllable) : 8;
+							pt.drawText("-", textX + tw * 0.55f, lyricY);
+						}
 					}
 					break;
 				case Extend:
-					// TODO
+					// <extend> = 上一个音节的拖尾延长横线，画一小段水平 dash
+					float dashLen = Math.max(12, SP * 2f);
+					float dashY = lyricY - SP * 0.35f;
+					pt.drawLine(textX, dashY, textX + dashLen, dashY);
+					break;
 				}
-				lyricY += SP; // 每行歌词间隔 = 1 个 line spacing
+				lyricY += SP * 1.3f; // 每行歌词间隔（多 verse） = 稍大 line spacing
+			}
+			// restore paint textSize & align
+			if (paint != null && oldTextSize > 0) {
+				paint.setTextSize(oldTextSize);
+				paint.setTextAlign(android.graphics.Paint.Align.LEFT);
 			}
 		}
 

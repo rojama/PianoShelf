@@ -174,21 +174,21 @@ public class PaintTransfer {
 
 	public Point getPointFromMxlPosition(MxlPosition pos) {
 		float x = 0, y = 0;
+		float sc = (ct != null && ct.tenthsToPx > 0f) ? ct.tenthsToPx : 1f;
 		if (pos.getDefaultX() != null) {
-			x = pos.getDefaultX();
+			x = pos.getDefaultX() * sc;   // tenths → px
 		} else if (pos.getRelativeX() != null) {
-			x = oldX + pos.getRelativeX();
+			x = oldX + pos.getRelativeX() * sc;
 		}
 		if (pos.getDefaultY() != null) {
-			y = pos.getDefaultY();
+			y = pos.getDefaultY() * sc;   // tenths → px
 		} else if (pos.getRelativeY() != null) {
-			y = oldY + pos.getRelativeY();
+			y = oldY + pos.getRelativeY() * sc;
 		}
 		this.setPoint(x, y);
-
-		return new Point(Math.round(x), Math.round(this.ct.pageHeight - y));
-		// return new Point(this.getZoomedX(x),this.getZoomedY(ct.pageHeight -
-		// y));
+		// default-y: 原点 = 页面左下，向上为正 → canvas 坐标系 (0=top) 需要 pageHeight - y
+		float pageH = (ct != null && ct.pageHeight > 0) ? ct.pageHeight : 2400f;
+		return new Point(Math.round(x), Math.round(pageH - y));
 	}
 
 	public void setPointInMeasure(MxlPosition pos) {
@@ -352,6 +352,10 @@ public class PaintTransfer {
 	}
 
 	// 画谱号
+	// 【关键修复】：1) 谱号相对 5 线的位置：参考 staff line(1=bottom,5=top)
+	//                   targetY = staff_top + (5 - clef.getLine()) * SP
+	//                   clefBitmapTop = targetY - symTTB (让谱号参考线对齐 staff 上对应线条)
+	//              2) 谱号尺寸：相对 4*SP (5 条线总高) 自适应缩放到 ≈4.3*SP 高度，避免与 notes 同 SYMBOL_SCALE 导致太大
 	public float printClef(int key, float x, float y) {
 		ClefType clef = this.nowClefType.get(key);
 		if (this.nowClefType != null && clef != null) {
@@ -361,16 +365,45 @@ public class PaintTransfer {
 			} else if (clef == ClefType.F) {
 				id = CommonSymbol.getClef(ClefType.F);
 			} else {
-				id = CommonSymbol.getClef(ClefType.G); // C / Percussion / TAB / None 兜底 G
+				id = CommonSymbol.getClef(ClefType.G); // 兜底
 			}
 			Symbol symbol = this.ct.symbolPool.getSymbol(id);
 			if (symbol == null || symbol.getBitmap() == null) return 0;
-			int line = clef.getLine();
-			int sp = S();
-			y = y - line * sp / 2;
-			y += 4 * sp - symTopToBase(symbol);
-			this.drawBitmap(symbol.getBitmap(), this.measureLeft + x, y);
-			return symW(symbol);
+			final int line = clef.getLine();
+			final int sp = S();
+			final Bitmap origBitmap = symbol.getBitmap();
+			final int rawH = origBitmap.getHeight();
+			final int rawW = origBitmap.getWidth();
+			final float rawTTB = symbol.getTopToBase(); // 原始 bitmap 里 top→参考线 (base) 的像素距离
+			// 2) 计算 clef 专用 scale：目标: bitmap 总高 ≈ 4.3 * SP (大约覆盖 5 条线 + 上缘小突起)
+			float targClefH = Math.max(16f, 4.3f * sp);
+			float clefScale = Math.max(0.5f, Math.min(2.5f, targClefH / Math.max(1, rawH)));
+			// 如果 symTopToBase 与 SP 的比例不一致，也做一次修正：希望 scaledTTB ≈ 对应 staff line 间距
+			//   参考点 targetTTB_for_G = 3*SP (line=2 到 staff top 的距离)
+			//   clefScale 可能让 TTB 非整数：保留直接用 scale，不用再二次调整
+			int scaledW = Math.max(1, Math.round(rawW * clefScale));
+			int scaledTTB = Math.round(rawTTB * clefScale);
+			// 1) Y 坐标：staff line 5 = y (smallest)，line N from bottom → y + (5-N)*sp
+			float targetLineY = y + (5 - line) * (float) sp;
+			float drawTopY = targetLineY - scaledTTB;
+			float drawX = this.measureLeft + x;
+
+			// 用 scale 绘制（带染色，避免 drawBitmap 里的 SYMBOL_SCALE 再次叠加把 clef 放大）
+			if (ct != null && ct.collectAllNotesForPlayback) return scaledW;
+			Bitmap src = origBitmap;
+			try {
+				if (Math.abs(clefScale - 1.0f) > 0.01f) {
+					android.graphics.Matrix m = new android.graphics.Matrix();
+					m.postScale(clefScale, clefScale);
+					src = Bitmap.createBitmap(origBitmap, 0, 0, rawW, rawH, m, true);
+				}
+				try {
+					Canvas can = new Canvas(src);
+					can.drawColor(this.getPaint().getColor(), android.graphics.PorterDuff.Mode.MULTIPLY);
+				} catch (Throwable ignored) { }
+				this.getCanvas().drawBitmap(src, drawX, drawTopY, this.getPaint());
+			} catch (Throwable ignored) { }
+			return scaledW;
 		}
 		return 0;
 	}
