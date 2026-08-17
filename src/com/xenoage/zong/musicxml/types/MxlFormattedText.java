@@ -87,7 +87,8 @@ public final class MxlFormattedText
   
   public void paint(PaintTransfer pt){
 	  String textContent = this.getValue();
-		Paint paint = PaintUtil.getPaint(this,pt.getPaint());
+		Paint paint = PaintUtil.getPaint(this, pt.getPaint(),
+				(pt != null && pt.ct != null) ? pt.ct : null);
 		pt.setPaint(paint);
 		MxlPosition mxlPos = this.getPrintStyle().getPosition();
 		Point point = pt.getPointFromMxlPosition(mxlPos);
