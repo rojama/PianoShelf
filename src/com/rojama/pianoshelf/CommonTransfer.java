@@ -11,6 +11,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Bitmap.Config;
+import android.util.Log;
 
 import com.xenoage.pdlib.PVector;
 import com.xenoage.zong.musicxml.types.MxlDefaults;
@@ -25,40 +26,76 @@ public class CommonTransfer {
 	public final int PART_NAME_SIZE = 15;
 
 	/**
-	 * 五线谱"两线之间"的距离（也就是 MusicXML 里 1 个 staff-space）。
-	 * 统一常量后：
-	 *  - 五线谱 5 条线：4 个间距 → 总高 = STAFF_LINE_SPACING * 4
-	 *  - 一个 note head 高度应该 ≈ STAFF_LINE_SPACING（我们在 drawBitmap 时按比例缩放 symbol bitmap）
-	 *  - 符干长度 = NOTE_LINE_HIGHT（≈ 3 * STAFF_LINE_SPACING）
-	 * 原先代码把 10 写死在 MxlMeasure / MxlNote / MxlBarline 各处，现在统一到这里，
-	 * 调整 STAFF_LINE_SPACING 即可整体调整五线谱 vs 音符的相对密度。
+	 * MusicXML tenths → 像素 换算系数（由 <defaults><millimeters>/<tenths> 计算）。
+	 *   默认 6.35mm / 40tenths = 0.15875 mm/tenth，再按 DPI 换算为 px。
+	 * XML 里所有距离（staff-distance / system-distance / page-width / page-height /
+	 *        staff-distance 等）都要乘以这个系数，才能得到正确的像素尺寸。
+	 * XML 未声明时用默认值。
 	 */
-	public final int STAFF_LINE_SPACING = 9;
+	public float tenthsToPx = 0f;   // 在 MxlDefaults.paint() 中初始化
+	public float mmToPx = 1f / 3.528f;  // 默认 90 DPI → 1mm≈3.528px，1/3.528≈0.2835（兜底值）
 
 	/**
-	 * 符干长度（从 note head 延伸出去的长度），与 STAFF_LINE_SPACING 保持 10:34 的原始比例。
-	 * STAFF_LINE_SPACING=9 → 9/10*34 = 30.6 → 30。
+	 * 五线谱"两线之间"的距离（1 staff-space）。
+	 * 【由 XML tenths 动态计算，不再写死 9】
+	 *   XML defaults: 40 tenths = 6.35mm → 1 staff-space = 10 tenths（标准 MusicXML）
+	 *   → STAFF_LINE_SPACING = 10 * tenthsToPx；
+	 * 如果 XML 没有显式给出 staff-layout/staff-distance，则使用该计算值。
 	 */
-	public final int NOTE_LINE_HIGHT = 30;
+	public int STAFF_LINE_SPACING = 10;   // 默认 10（兜底），paint 中会覆盖
+
+	/** 符干长度 = 约 3.5 个 STAFF_LINE_SPACING（标准音乐出版规范：3.5 space） */
+	public int NOTE_LINE_HIGHT = 35;
+
+	/** 音符之间水平间隔（≈ 半个 staff-space，按 STAFF_LINE_SPACING 计算） */
+	public int SPACE = 5;
+
+	/** 单个 note head 大致宽度（≈ 1.4× staff-space），用于 chord/X 位置判断 */
+	public int NOTE_WIDTH = 14;
 
 	/**
-	 * 音符/符号之间的水平"间隔"（measure 里 oldX 推进后再多加这几个 px）。
-	 * 原 5；随着 STAFF_LINE_SPACING 缩小也同步按 10:9 缩小。
+	 * Symbol bitmap 缩放因子。
+	 * 默认符号按 STAFF_LINE_SPACING=10（10px）设计；如果实际 STAFF_LINE_SPACING 为 16px，
+	 * 应该放大 1.6 倍 → SYMBOL_SCALE = STAFF_LINE_SPACING / 10.0f。
+	 * 在 applyScalingFromXml() 中赋值。
 	 */
-	public final int SPACE = 4;
+	public float SYMBOL_SCALE = 1.0f;
 
-	/**
-	 * 音符宽度（用于"同一 x 位置判断"），也按 STAFF_LINE_SPACING 同比缩放。
-	 * 原 15 → 15*0.9=13.5 → 13。
-	 */
-	public final int NOTE_WIDTH = 13;
+	/** 重新根据 XML tenths / screen 应用所有缩放（MxlDefaults 初始化完成后调用） */
+	public void applyScalingFromXml(float tenthsMm, float tenthsPerMmUnit) {
+		// step 1: DPI 探测：screenHeight/screenWidth 若可用 → 以 6 寸屏幕 1080x1920 为基准估计 mmToPx
+		if (screenWidth > 0 && screenHeight > 0) {
+			// 用经验公式：1mm 约等于屏幕短边像素 / 70（Ave Maria 4 systems 适配）
+			float shortEdge = Math.min(screenWidth, screenHeight);
+			// 6.35mm=40tenths, 1mm≈6.299tenths，最终 STAFF_LINE_SPACING(=10tenths) 约等于 8~16px 最舒服
+			// 直接用 tenths:px = 1 : 1.6 作为基准（10 tenths=16px 好显示）
+			this.mmToPx = shortEdge / 70f / 25.4f * 25.4f / 10f; // unused，下面直接给 tenthsToPx
+			// 目标：1 staff-space (10 tenths) ≈ shortEdge*0.008  ~= 1080*0.008=8.6px  小屏偏细
+			// 更稳：固定 1 tenths = 1.5 px → 1 staff-space = 15 px；大乐谱/小屏按 shortEdge 适配：
+			float targetPxPerStaffSpace = Math.max(9, Math.min(20, shortEdge / 70f));  // 9~20px
+			// 10 tenths = 1 staff-space
+			this.tenthsToPx = targetPxPerStaffSpace / 10f;
+		} else {
+			this.tenthsToPx = 1.5f; // 1.5 px per tenth (兜底)
+		}
 
-	/**
-	 * 画 bitmap 时统一使用的缩放因子：把 SymbolPool 加载出来的 note/clef/rest/flag/beam 等符号
-	 * 按 STAFF_LINE_SPACING 同比缩小，让"音符大小 vs 五线谱线间距"匹配。
-	 * 原代码 STAFF_LINE_SPACING ≈ 10 时符号是 1x；现在改成 9 → 0.9x。
-	 */
-	public final float SYMBOL_SCALE = 0.90f;
+		// XML defaults 若声明 <millimeters>6.35</millimeters><tenths>40</tenths> 就尊重单位：
+		// 6.35 mm/40 tenths * mmToPx（不强制，仅作为附加缩放的可选项，我们用屏幕像素优先）
+		// step 2: STAFF_LINE_SPACING = 10 tenths × tenthsToPx
+		float sp = 10f * this.tenthsToPx;
+		this.STAFF_LINE_SPACING = Math.max(5, Math.round(sp));
+		// step 3: 派生其他常量
+		this.NOTE_LINE_HIGHT = Math.round(this.STAFF_LINE_SPACING * 3.5f);  // 标准 3.5 space
+		this.SPACE = Math.max(2, Math.round(this.STAFF_LINE_SPACING * 0.5f));
+		this.NOTE_WIDTH = Math.round(this.STAFF_LINE_SPACING * 1.4f);
+		this.SYMBOL_SCALE = this.STAFF_LINE_SPACING / 10f;
+		DebugLog.i(TAG, "applyScalingFromXml: tenthsToPx=" + this.tenthsToPx
+				+ " STAFF_LINE_SPACING=" + this.STAFF_LINE_SPACING
+				+ " NOTE_LINE_HIGHT=" + this.NOTE_LINE_HIGHT
+				+ " SPACE=" + this.SPACE + " NOTE_WIDTH=" + this.NOTE_WIDTH
+				+ " SYMBOL_SCALE=" + this.SYMBOL_SCALE
+				+ " screen=" + screenWidth + "x" + screenHeight);
+	}
 
 	//每一部分的所有的PaintTransfer
 	public Map<String, PaintTransfer> oldPaintTransfer = new HashMap<String, PaintTransfer>();

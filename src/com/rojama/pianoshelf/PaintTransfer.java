@@ -53,7 +53,7 @@ public class PaintTransfer {
 	public Map<MxlCurvedLine, PointF> lastCurvedLinePoint = new HashMap<MxlCurvedLine, PointF>();;
 	public String nowPartID;
 	public int nowPage = 1;
-	public int nowLine = 1;
+	public int nowLine = 0;   // 初始 0（MxlPrint L142 里 ++nowLine → 第 1 行 key=1）
 	public int nowMeasure = 0;
 
 	public float measureLeft = 0; // 当前小节左边X坐标
@@ -112,10 +112,18 @@ public class PaintTransfer {
 
 	public Float getStaffDistance(Integer num) {
 		if (this.staffLayout.containsKey(num)) {
-			return this.staffLayout.get(num);
+			Float v = this.staffLayout.get(num);
+			// XML staff-distance 是 tenths 单位 → 转换为 px（paint 时 tenthsToPx 已就绪）
+			if (v != null && ct != null && ct.tenthsToPx > 0f) {
+				return v * ct.tenthsToPx;
+			}
+			return v;
 		} else if (this.staffLayout.containsKey(null)) {
-			return this.staffLayout.get(null);
+			Float v = this.staffLayout.get(null);
+			if (v != null && ct != null && ct.tenthsToPx > 0f) return v * ct.tenthsToPx;
+			return v;
 		} else if (this.ct != null && this.ct.systemDistance > 0) {
+			// 注意：systemDistance 已经是 px（在 SystemLayout.paint 里 *过 tenthsToPx）
 			return this.ct.systemDistance;
 		} else {
 			// 终极兜底：返回 1.5 倍行高（避免 null 导致调用方拆箱 NPE）

@@ -73,24 +73,30 @@ public final class MxlSystemLayout {
 	}
 
 	public void paint(PaintTransfer pt) {
+		// ===== 修复 tenths → px：XML 的 system-distance 是 tenths =====
+		float sc = (pt.ct.tenthsToPx > 0f) ? pt.ct.tenthsToPx : 1f;
 		if (this.getTopSystemDistance() != null) {
-			pt.ct.systemTopDistance = this.getTopSystemDistance();
+			pt.ct.systemTopDistance = this.getTopSystemDistance() * sc;
 		} else if (pt.ct.defaults.getLayout().getSystemLayout() != null) {
-			pt.ct.systemTopDistance = pt.ct.defaults.getLayout().getSystemLayout().getTopSystemDistance();
+			Float v = pt.ct.defaults.getLayout().getSystemLayout().getTopSystemDistance();
+			pt.ct.systemTopDistance = (v == null) ? 0 : (v * sc);
 		}
 		if (this.getSystemDistance() != null) {
-			pt.ct.systemDistance = this.getSystemDistance();
+			pt.ct.systemDistance = this.getSystemDistance() * sc;
 		} else if (pt.ct.defaults.getLayout().getSystemLayout() != null) {
-			pt.ct.systemDistance = pt.ct.defaults.getLayout().getSystemLayout().getSystemDistance();
+			Float v = pt.ct.defaults.getLayout().getSystemLayout().getSystemDistance();
+			pt.ct.systemDistance = (v == null) ? 0 : (v * sc);
 		}
 		if (this.getSystemMargins() != null) {
-			pt.ct.systemLeftMargin = this.getSystemMargins().getLeftMargin();
-			pt.ct.systemRightMargin = this.getSystemMargins().getRightMargin();
+			pt.ct.systemLeftMargin = this.getSystemMargins().getLeftMargin() * sc;
+			pt.ct.systemRightMargin = this.getSystemMargins().getRightMargin() * sc;
 		} else if (pt.ct.defaults.getLayout().getSystemLayout() != null){
-			pt.ct.systemLeftMargin = pt.ct.defaults.getLayout().getSystemLayout().getSystemMargins()
-					.getLeftMargin();
-			pt.ct.systemRightMargin = pt.ct.defaults.getLayout().getSystemLayout().getSystemMargins()
-					.getRightMargin();
+			if (pt.ct.defaults.getLayout().getSystemLayout().getSystemMargins() != null) {
+				pt.ct.systemLeftMargin = pt.ct.defaults.getLayout().getSystemLayout().getSystemMargins()
+						.getLeftMargin() * sc;
+				pt.ct.systemRightMargin = pt.ct.defaults.getLayout().getSystemLayout().getSystemMargins()
+						.getRightMargin() * sc;
+			}
 		}
 	}
 }

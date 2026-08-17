@@ -82,8 +82,12 @@ public final class MxlPageLayout {
 	}
 
 	public void paint(PaintTransfer pt) {
-		Float pageHeight = this.getPageHeight()!=null?this.getPageHeight():pt.getPageHeight();
-		Float pageWidth = this.getPageWidth()!=null?this.getPageWidth():pt.getPageWidth();
+		// ===== 修复 tenths → px 换算：XML 的 page-height/width 单位是 tenths，不是 px =====
+		float sc = (pt.ct.tenthsToPx > 0f) ? pt.ct.tenthsToPx : 1f;
+		Float rawPH = this.getPageHeight();
+		Float rawPW = this.getPageWidth();
+		Float pageHeight = (rawPH != null) ? (rawPH * sc) : pt.getPageHeight();
+		Float pageWidth  = (rawPW  != null) ? (rawPW  * sc) : pt.getPageWidth();
 		pt.ct.setPage(pageWidth, pageHeight);
 		pt.ct.pagemargins = this.getPageMargins(); //TODO 覆盖处理
 	}

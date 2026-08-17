@@ -69,6 +69,93 @@ public final class MxlPrint implements MxlMusicDataContent {
 
 	@Override
 	public void print(PaintTransfer pt) {
+		// ===== 修复 (1): 当 XML 没有 <print new-page>，但下一 system 预测 Y > pageBottom 时，自动分页 =====
+		// (scoreHeader.paint → layout.paint 已跑完，pt.ct.pageHeight/pageWidth/tenthsToPx 都已就绪)
+		// 先尝试：当 printAttributes.getNewSystem()/getNewPage() 为 null，但 nowMeasure>=1 时，
+		// 检查 nowLine 的 measureUp（第 1 staff）+ 所有 staff 叠加总高 + systemDistance 是否超 bottomMargin。
+		try {
+			int numStaffs = pt.nowClefType.size();
+			if (numStaffs <= 0) numStaffs = Math.max(1, pt.staffLayout.size());
+			final int SP = pt.ct.STAFF_LINE_SPACING;
+			// 计算当前页面最后一个 system 的预测底 Y（若 isNewSystem 触发，将落在 nowLine 的下一行）
+			int nextLineKey = pt.nowLine + 1;
+			float nextSystemTopY = 0f;
+			// 如果 nowMeasure > 1 且还没有 measureUpAll 下一条，推算：
+			if (pt.nowMeasure > 0 && !pt.firstIn) {
+				float lastTopY;
+				if (pt.measureUpAll.containsKey(nextLineKey)) {
+					lastTopY = pt.measureUpAll.get(nextLineKey);
+				} else {
+					// 基于 nowLine 的 getMeasureUp(1) + systemDistance（已经 px 化）
+					float cur1 = pt.getMeasureUp(1);
+					float sysDist = (pt.ct.systemDistance > 0) ? pt.ct.systemDistance
+							: (SP * 4 + 24f);
+					lastTopY = cur1 + sysDist;
+				}
+				// 总 staff 高：staff 1 topY + (numStaffs-1) staffs 各自 getStaffDistance + 最后 staff 五线谱高
+				float totalSysBottomY = lastTopY; // 先给 staff 1 top
+				for (int s = 2; s <= numStaffs; s++) {
+					Float dist = pt.getStaffDistance(s);
+					totalSysBottomY += (dist != null ? dist.floatValue() : (SP * 1.5f));
+				}
+				totalSysBottomY += 4f * SP; // staff 五线谱 5 线 4 间隔
+
+				// 页面可用底部
+				float bottomMarginPx = 0f;
+				if (pt.ct.pagemargins != null && pt.ct.pagemargins.size() > 0
+						&& pt.ct.pagemargins.get(0) != null) {
+					bottomMarginPx = pt.ct.pagemargins.get(0).getBottomMargin();
+					if (pt.ct.tenthsToPx > 0f) bottomMarginPx *= pt.ct.tenthsToPx;
+				} else {
+					bottomMarginPx = 4 * SP;
+				}
+				float availBottom = pt.ct.pageHeight - bottomMarginPx;
+
+				// 当这个是 new-system 的 print（XML 显式写了）或 即便没写但 measureLeft+measureWidth
+				// 已经接近右边（要换行的隐含条件），且超过 bottom，就触发 nowPage++
+				boolean forcePage = (totalSysBottomY > availBottom) && pt.nowMeasure > 1;
+				// XML 里显式 new-system 但没有 new-page 标记时也判断
+				boolean explicitNewSys = this.getPrintAttributes() != null
+						&& this.getPrintAttributes().getNewSystem() != null
+						&& this.getPrintAttributes().getNewSystem();
+				if (forcePage || explicitNewSys && totalSysBottomY > availBottom * 0.98f) {
+					pt.nowPage++;
+					if (pt.ct.maxPage < pt.nowPage) pt.ct.maxPage = pt.nowPage;
+					pt.ct.oldPartID = null;
+					pt.nowLine = 0;
+					// 下面的 new-page 分支会继续处理 measureLeft / isNewSystem
+					if (this.getPrintAttributes() == null
+							|| this.getPrintAttributes().getNewPage() == null
+							|| !this.getPrintAttributes().getNewPage()) {
+						// 用临时方式模拟 new-page
+						float topMarginPx = 0f;
+						if (pt.ct.pagemargins != null && pt.ct.pagemargins.size() > 0
+								&& pt.ct.pagemargins.get(0) != null) {
+							topMarginPx = pt.ct.pagemargins.get(0).getTopMargin();
+							if (pt.ct.tenthsToPx > 0f) topMarginPx *= pt.ct.tenthsToPx;
+						}
+						float leftMarginPx = 0f;
+						if (pt.ct.pagemargins != null && pt.ct.pagemargins.size() > 0
+								&& pt.ct.pagemargins.get(0) != null) {
+							leftMarginPx = pt.ct.pagemargins.get(0).getLeftMargin();
+							if (pt.ct.tenthsToPx > 0f) leftMarginPx *= pt.ct.tenthsToPx;
+						}
+						pt.measureLeft = pt.ct.systemLeftMargin + leftMarginPx;
+						pt.measureUp = pt.ct.systemTopDistance + topMarginPx;
+						pt.isNewSystem = true;
+						com.rojama.pianoshelf.DebugLog.d("AutoPageBreak",
+								"触发自动分页: " +
+								"nowPage=" + pt.nowPage +
+								" 预测 nextSystemBottomY=" + totalSysBottomY +
+								"  可用 bottom=" + availBottom +
+								"  maxPage=" + pt.ct.maxPage);
+					}
+				}
+			}
+		} catch (Throwable t) {
+			com.rojama.pianoshelf.DebugLog.w("AutoPageBreak", "分页预判出错（忽略，继续渲染）", t);
+		}
+
 		// 如果有换行判断是否要处理
 		if (this.getPrintAttributes() != null) {
 			if (this.getPrintAttributes().getNewPage() != null) {
@@ -99,8 +186,12 @@ public final class MxlPrint implements MxlMusicDataContent {
 					if (pt.ct.maxPage < pt.nowPage)
 						pt.ct.maxPage = pt.nowPage;
 					pt.ct.oldPartID = null;
-					pt.measureLeft = pt.ct.systemLeftMargin + pt.getMxlAllMargins().getLeftMargin();
-					pt.measureUp = pt.ct.systemTopDistance + pt.getMxlAllMargins().getTopMargin();
+					// tenths → px margins 换算
+					float leftM = pt.getMxlAllMargins().getLeftMargin();
+					float topM = pt.getMxlAllMargins().getTopMargin();
+					if (pt.ct.tenthsToPx > 0f) { leftM *= pt.ct.tenthsToPx; topM *= pt.ct.tenthsToPx; }
+					pt.measureLeft = pt.ct.systemLeftMargin + leftM;
+					pt.measureUp = pt.ct.systemTopDistance + topM;
 					pt.isNewSystem = true;
 				}
 			}
@@ -116,7 +207,9 @@ public final class MxlPrint implements MxlMusicDataContent {
 //					} else {
 //						pt.measureUp += pt.ct.systemDistance + 40;
 //					}
-					pt.measureLeft = pt.ct.systemLeftMargin + pt.getMxlAllMargins().getLeftMargin();
+					float leftM = pt.getMxlAllMargins().getLeftMargin();
+					if (pt.ct.tenthsToPx > 0f) leftM *= pt.ct.tenthsToPx;
+					pt.measureLeft = pt.ct.systemLeftMargin + leftM;
 					pt.isNewSystem = true;
 				}
 			}
@@ -133,15 +226,21 @@ public final class MxlPrint implements MxlMusicDataContent {
 
 		// 第一部分的第一节
 		if (pt.nowMeasure == 1) {
-			pt.measureUp = pt.ct.systemTopDistance + pt.getMxlAllMargins().getTopMargin();
-			pt.measureLeft = pt.ct.systemLeftMargin + pt.getMxlAllMargins().getLeftMargin();
+			float topM = pt.getMxlAllMargins().getTopMargin();
+			float leftM = pt.getMxlAllMargins().getLeftMargin();
+			if (pt.ct.tenthsToPx > 0f) {
+				topM *= pt.ct.tenthsToPx;
+				leftM *= pt.ct.tenthsToPx;
+			}
+			pt.measureUp = pt.ct.systemTopDistance + topM;
+			pt.measureLeft = pt.ct.systemLeftMargin + leftM;
 			pt.isNewSystem = true;
 		}
 
 		// 记录每一行的顶部用于下一部分的测量
 		if (pt.isNewSystem || pt.measureUpAll.isEmpty()) {
 			if (pt.ct.oldPartID != null) {
-				Log.d("pt.nowLine", pt.nowLine+"");
+				android.util.Log.d("pt.nowLine", pt.nowLine+"");
 				PaintTransfer oldPT = pt.ct.oldPaintTransfer.get(pt.ct.oldPartID);
 				pt.measureUp = oldPT.getMeasureUp(oldPT.nowClefType.size()) + pt.getStaffDistance(1) + 40;
 			}

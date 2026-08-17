@@ -498,36 +498,59 @@ public final class MxlNote implements MxlMusicDataContent {
 				}
 
 				// 画符干（WHOLE 音符没有符干）
+				// 【修复】：stem X/Y 与 SYMBOL_SCALE/STAFF_LINE_SPACING 强一致：
+				//   Up 情况：note head 右侧 (left + noteSymW - 1)，startY = head 顶部 + 半个 line(SP/2)，
+				//           stopY = startY - NOTE_LINE_HIGHT（标准 3.5 SP）
+				//   Down 情况：note head 左侧 + 1，startY = head 底部 - SP/2
+				//             stopY = startY + NOTE_LINE_HIGHT
+				// 同时处理 chord（isSameX）时左右 note stem 的对齐。
 				if (this.getType().type.ordinal() < MxlTypeValue.WHOLE.ordinal()) {
-					float beginX = pt.measureLeft + pt.oldX, startY = pt.measureUp + pt.oldY, stopY = startY;
-
+					final int TTBASE = pt.symTopToBase(symbol);  // note head 的 top→第4线(base) 距离
+					// head 在 canvas 上的 top Y:
+					final float headTopY = pt.measureUp + pt.oldY - TTBASE + 1;
+					// head 的 base Y = topY + note head 可视高 (≈ symH(symbol) 为总高；base 对应 TTBASE)
+					// note head 在标准中是 1 SP 高，我们使用 SP 计算 baseY 来对齐，避免不同缩放时 stem 错位：
+					final float headBaseY = headTopY + TTBASE;   // 五线谱 4 线线位置(=最底 staff line +1/2SP 对应 note 的 base)
+					// 最常用：stem 起点 Y 对齐 note head 的 上/下缘（相对 pitch line）
+					float beginX = pt.measureLeft + pt.oldX;
+					float startY, stopY;
+					// 根据 stemValue 选 startY 和 beginX
 					switch (stemValue) {
 					case Up:
+						// stem 从 note head 右上出发 (Up 时 stem 在 head 右边，从 head TOP+SP/2 向上)
 						if (isSameX && pt.oldX > oldLastNoteX) {
-							// beginX -= 1;
+							// chord: 下方 note X 偏右，stem 画在左边（和上一个对齐）
 						} else {
 							beginX += noteSymW - 1;
 						}
-						stopY -= pt.ct.NOTE_LINE_HIGHT;
+						// startY = head baseY (head 下边缘处) → 向上减 NOTE_LINE_HIGHT 得到 top 端点
+						startY = headBaseY - SP / 2f;
+						// stopY = startY - NOTE_LINE_HIGHT，但最短到 headTopY 以上 3 SP
+						stopY = startY - pt.ct.NOTE_LINE_HIGHT;
 						break;
 					case Down:
+					default:
+						// stem 从 note head 左下出发 (Down 时 stem 在 head 左边)
 						if (isSameX && pt.oldX < oldLastNoteX) {
 							beginX += noteSymW - 1;
 						} else {
-							// beginX += 1;
+							// beginX 不变 (最左 edge)
 						}
-						stopY += pt.ct.NOTE_LINE_HIGHT;
+						startY = headTopY + SP / 2f;
+						stopY = startY + pt.ct.NOTE_LINE_HIGHT;
 						break;
 					}
 
 					if (stemPosition.getDefaultY() != null) {
-						stopY = pt.measureUp - stemPosition.getDefaultY();
+						float sc = (pt.ct.tenthsToPx > 0f) ? pt.ct.tenthsToPx : 1f;
+						// XML stem@default-y 单位 tenths，取相对 measureUp，向下为正
+						stopY = pt.measureUp - stemPosition.getDefaultY() * sc;
 					}
 
 					pt.drawLine(beginX, startY, beginX, stopY);
 
 					if (this.getBeams().size() > 0) {
-						// 画符梁：每条 beam 偏移一个 STAFF_LINE_SPACING
+						// 画符梁：每条 beam 偏移一个 STAFF_LINE_SPACING，按 stem 方向相对 stopY 偏移
 						float beamX = beginX, beamY = stopY;
 						try {
 							for (MxlBeam beam : this.getBeams()) {
@@ -548,8 +571,10 @@ public final class MxlNote implements MxlMusicDataContent {
 										case Continue:
 										case End:
 											PointF point = pt.lastBeamPoint.get(lastBeam);
-											// 画粗点：3px 粗的线
-											for (int i = -1; i <= 1; i++) {
+											// 画粗点：3px 粗的线，也按 scale 放大
+											int thick = Math.max(1, Math.round(SP * 0.35f));
+											int half = (thick - 1) / 2;
+											for (int i = -half; i <= half; i++) {
 												pt.drawLine(point.x, point.y + i, beamX, beamY + i);
 											}
 											pt.lastBeamPoint.remove(lastBeam);
@@ -567,25 +592,28 @@ public final class MxlNote implements MxlMusicDataContent {
 							DebugLog.w("MxlNote", "  画符梁出错（忽略）", t);
 						}
 					} else if (pt.lastBeamPoint.isEmpty() && !isSameX) {
-						// 画符旗
+						// 画符旗 (flags)
 						Symbol flagSym = pt.ct.symbolPool.getSymbol(CommonSymbol.NoteFlag);
 						if (flagSym != null && flagSym.getBitmap() != null) {
 							final int flagH = pt.symH(flagSym);
 							final int flagTTB = pt.symTopToBase(flagSym);
-							float flagHight = flagH - flagTTB;
-							for (int i = 0; i < MxlTypeValue.QUARTER.ordinal()
-									- this.getType().type.ordinal(); i++) {
+							float flagHight = Math.max(SP, flagH - flagTTB);
+							int flags = MxlTypeValue.QUARTER.ordinal() - this.getType().type.ordinal();
+							for (int i = 0; i < flags; i++) {
 								switch (stemValue) {
 								case Up:
+									// flag 挂在 stem 末端 (stopY) ，向下叠
 									pt.drawBitmap(flagSym.getBitmap(), beginX, stopY + i * flagHight);
 									break;
 								case Down:
+									// Down 方向：先镜像，再对齐 stem 末端
 									Matrix mx = new Matrix();
-									mx.setScale(1, -1); // 产生镜像
+									mx.setScale(1, -1);
 									Bitmap flagOrigBitmap = flagSym.getBitmap();
 									Bitmap newBitmap = Bitmap.createBitmap(flagOrigBitmap, 0, 0,
 											flagOrigBitmap.getWidth(), flagOrigBitmap.getHeight(), mx, true);
-									pt.drawBitmap(newBitmap, beginX, stopY - (i + 2) * flagHight);
+									// flag 高 = flagHight → 第 i 个从 stopY 向上偏移 (i+1)*flagHight
+									pt.drawBitmap(newBitmap, beginX, stopY - (i + 1) * flagHight);
 									break;
 								}
 							}
