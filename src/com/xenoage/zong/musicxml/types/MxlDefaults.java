@@ -88,11 +88,9 @@ public final class MxlDefaults
 	  // ===== 修复 tenths 单位换算：在 page-layout paint 前初始化 tenthsToPx =====
 	  float tenthsMm = 0f, tenthsPer = 0f;
 	  if (this.getScaling() != null) {
-		  tenthsMm = (this.getScaling().getMillimeters() == null) ? 0f
-				  : this.getScaling().getMillimeters().floatValue();
-		  tenthsPer = (this.getScaling().getTenths() == null) ? 0f
-				  : this.getScaling().getTenths().floatValue();
-	  }
+    	  tenthsMm = this.getScaling().getMillimeters(); // 返回 primitive float，0 视为缺省
+    	  tenthsPer = this.getScaling().getTenths();
+      }
 	  pt.ct.applyScalingFromXml(tenthsMm, tenthsPer);
 	  this.getLayout().paint(pt);
 	  //TODO
