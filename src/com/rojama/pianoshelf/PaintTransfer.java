@@ -77,16 +77,22 @@ public class PaintTransfer {
 	public Map<String, PaintTransfer> oldPaintTransfer = new HashMap<String, PaintTransfer>();
 
 	public Float getMeasureUp(Integer num) {
-		Integer ln = (nowLine == null || nowLine < 1) ? 1 : nowLine;
+		int ln = (nowLine < 1) ? 1 : nowLine;
 		Float raw = this.measureUpAll.get(ln);
 		// ===== NPE 兜底：measureUpAll 中不存在 nowLine 对应 key 时，按 systemTopDistance + (ln-1)*systemDistance 推算 =====
 		// 正常流程 measureUpAll 应由 MxlPrint 在 collect/render 阶段写入，这里防极端 case（如 XML 缺 print/new-system 节点）
 		if (raw == null) {
 			int staffH = (ct != null) ? (4 * ct.STAFF_LINE_SPACING) : 40;
-			float sysDist = (ct != null && ct.systemDistance != null) ? ct.systemDistance : staffH * 2f;
-			float topDist = (ct != null && ct.systemTopDistance != null) ? ct.systemTopDistance : staffH * 2f;
-			float topMargin = (ct != null && ct.getMxlAllMargins() != null && ct.getMxlAllMargins().getTopMargin() != null)
-					? ct.getMxlAllMargins().getTopMargin() : 0f;
+			// systemDistance / systemTopDistance 都是 primitive float，默认 0；> 0 代表 XML 有写入
+			float sysDist = (ct != null && ct.systemDistance > 0) ? ct.systemDistance : staffH * 2f;
+			float topDist = (ct != null && ct.systemTopDistance > 0) ? ct.systemTopDistance : staffH * 2f;
+			// 页边距：取 pagemargins 第 1 个的 top（默认 0）
+			float topMargin = 0f;
+			if (ct != null && ct.pagemargins != null && ct.pagemargins.size() > 0
+					&& ct.pagemargins.get(0) != null) {
+				topMargin = ct.pagemargins.get(0).getTopMargin();
+				if (topMargin < 0) topMargin = 0f;
+			}
 			float baseY = topDist + topMargin;
 			// nowLine=1 → 不加系统距离；nowLine>=2 → 每条 line 叠加系统距离+行高(单 staff 近似)
 			float fallback = baseY + Math.max(0, ln - 1) * (sysDist + staffH);
@@ -109,7 +115,7 @@ public class PaintTransfer {
 			return this.staffLayout.get(num);
 		} else if (this.staffLayout.containsKey(null)) {
 			return this.staffLayout.get(null);
-		} else if (this.ct != null && this.ct.systemDistance != null) {
+		} else if (this.ct != null && this.ct.systemDistance > 0) {
 			return this.ct.systemDistance;
 		} else {
 			// 终极兜底：返回 1.5 倍行高（避免 null 导致调用方拆箱 NPE）
